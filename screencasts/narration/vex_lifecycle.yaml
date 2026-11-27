@@ -1,0 +1,87 @@
+# Narration for screencasts/vex_lifecycle.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      A VEX tells your customers which vulnerabilities do not affect them. Here
+      is where one comes from in sbomify, and what your customers end up
+      seeing.
+
+  scan_found:
+    text: >-
+      The latest scan of Compression Core Library found two criticals and two
+      highs.
+
+  team_checks_libwebp:
+    text: >-
+      Most teams never write a VEX file by hand. Your team checks the libwebp
+      critical, and finds the vulnerable decoder is never called.
+
+  triage_not_affected:
+    text: >-
+      So you triage it. Choose Not affected, give the justification, code not
+      reachable, and say why in your own words.
+
+  save_writes_vex:
+    text: >-
+      Save the decision, and sbomify writes the VEX for the component itself.
+      There is no file to write or upload.
+
+  vex_on_component:
+    text: >-
+      The new VEX is listed on the component, and its page shows the libwebp
+      decision it carries.
+
+  agent_tries_apply:
+    text: >-
+      An AI agent can do the same check. With a token made for an AI agent, it
+      rules the OpenSSL high not affected, and tries to apply that ruling
+      itself.
+
+  agent_refused:
+    text: >-
+      sbomify refuses. An agent cannot apply a ruling on its own, so it sends
+      the ruling for review instead, with its reasoning.
+
+  agent_sends_review:
+    text: >-
+      sbomify accepts it, and nothing changes yet.
+
+  ruling_waits_review:
+    text: >-
+      The ruling waits on the Review tab, marked as from an AI agent, with what
+      it checked and what it would close.
+
+  approve_same_vex:
+    text: >-
+      Approve it, and the ruling lands in the same VEX as your own decision.
+
+  upload_other_tool:
+    text: >-
+      Some VEX comes from another tool, like a supplier's. That is what upload
+      is for.
+
+  upload_from_menu:
+    text: >-
+      In the component's actions menu, choose Upload VEX, and drop in the file.
+
+  preview_first:
+    text: >-
+      Before anything is stored, a preview shows what it would suppress.
+
+  apply_closes:
+    text: >-
+      Apply it, and the krb5 high closes too. Only the zlib critical is still
+      open, because that one is real.
+
+  trust_center:
+    text: >-
+      On your Trust Center, customers see three vulnerabilities suppressed by
+      VEX, and the one you are still fixing.
+
+  download_one_vex:
+    text: >-
+      And they download one VEX that carries every decision, wherever it came
+      from.

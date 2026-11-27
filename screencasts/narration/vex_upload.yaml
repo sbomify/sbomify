@@ -1,0 +1,54 @@
+# Narration for screencasts/vex_upload.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Most teams never upload a VEX. sbomify writes one from your triage
+      decisions, and AI agents can propose rulings that a person approves.
+
+  triage_option:
+    text: >-
+      On any vulnerability, Triage records your decision, and sbomify writes the
+      VEX for you.
+
+  review_option:
+    text: >-
+      Rulings from AI agents wait on the Review tab until a person approves
+      them.
+
+  upload_other_tool:
+    text: >-
+      Upload is for VEX that another tool produced, like a supplier's.
+
+  open_component_s:
+    text: >-
+      Open the component's actions menu and choose Upload VEX.
+
+  drop_cyclonedx_vex:
+    text: >-
+      Drop in a CycloneDX VEX, an OpenVEX file or a CSAF document.
+
+  nothing_stored_yet:
+    text: >-
+      Nothing is stored yet. The preview shows what the VEX would suppress.
+
+  if_looks_right:
+    text: >-
+      If it looks right, apply it.
+
+  critical_has_left:
+    text: >-
+      The critical has left the open list, and the latest version now lists its
+      VEX.
+
+  nothing_deleted_filter:
+    text: >-
+      Nothing is deleted. Filter to closed by a decision to see it, with the
+      reason attached.
+
+  close:
+    text: >-
+      For your own decisions, use Triage, and let AI agents propose rulings for
+      a person to approve.

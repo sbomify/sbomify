@@ -1,0 +1,59 @@
+# Narration for screencasts/release_creation.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Here is how to create a release in sbomify. A release ties a product version
+      to the artifacts it shipped with.
+
+  every_product_has:
+    text: >-
+      Every product has a latest release. sbomify keeps it current with the newest
+      artifact of each component.
+
+  version_ship_create:
+    text: >-
+      For a version you ship, create a release from the product menu.
+
+  product_already_picked:
+    text: >-
+      The product is already picked. Give the release a name, a version and a
+      short description of what changed, then create it.
+
+  release_starts_empty:
+    text: >-
+      The release starts empty. Add the artifacts that went into this version.
+
+  search_filter_list:
+    text: >-
+      Search or filter the list, or select every SBOM at once.
+
+  release_holds_sbom:
+    text: >-
+      The release now holds the SBOM of every component, as shipped in version
+      2.0.0.
+
+  ships_with:
+    text: >-
+      This version also ships the Pied Piper Runtime, a separate product with its
+      own components and releases.
+
+  add_runtime:
+    text: >-
+      Under Ships with, add the runtime release it includes.
+
+  pick_version:
+    text: >-
+      Pick the runtime's version, 3.1.0, and add it.
+
+  combined_sbom:
+    text: >-
+      Now it is listed here. The release's combined SBOM carries the runtime's
+      SBOMs along with its own, so one download covers everything it ships.
+
+  public_page:
+    text: >-
+      Customers see it too. The release's public page lists the runtime under
+      Ships with, linked to its own release.

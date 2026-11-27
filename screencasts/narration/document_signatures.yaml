@@ -1,0 +1,40 @@
+# Narration for screencasts/document_signatures.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Here is how to attach a signature and build provenance to an SBOM, so anyone
+      can check it is genuine.
+
+  after_uploading_sbom:
+    text: >-
+      After uploading the SBOM, your pipeline signs it, for example with cosign.
+
+  posts_signature_bundle:
+    text: >-
+      Then it posts the signature bundle to the SBOM's signature endpoint.
+
+  slsa_provenance_attestation:
+    text: >-
+      A SLSA provenance attestation goes to the provenance endpoint. Its subject
+      must match the SBOM's hash.
+
+  sbomify_open_component:
+    text: >-
+      In sbomify, open the component, then the version you signed, to see what
+      the pipeline attached to it.
+
+  sbom_carries_signed:
+    text: >-
+      The SBOM now carries a Signed badge and a Provenance badge.
+
+  sbom_verification_assessment:
+    text: >-
+      The SBOM Verification assessment checks them, and every check passed.
+
+  open_met_requirements:
+    text: >-
+      Open the met requirements to see each one: the digest, the signature and the
+      provenance.

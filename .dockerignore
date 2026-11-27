@@ -12,6 +12,8 @@ node_modules/
 .mypy_cache/
 .claude/
 screencasts/
+bin/record_screencasts.sh
+docker-compose.screencasts-remote.yml
 .ruff_cache/
 .pytest_cache/
 **/__pycache__/

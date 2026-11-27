@@ -1,0 +1,126 @@
+# Narration for screencasts/cra_compliance.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Here is how to take a product through the EU Cyber Resilience Act in
+      sbomify, from scope screening to a published Declaration of Conformity.
+
+  compliance_lists_every:
+    text: >-
+      Compliance lists every CRA assessment. Start one and choose a product.
+
+  first_scope_screening:
+    text: >-
+      First, scope screening. Five questions from Articles 2 and 3 decide whether
+      the CRA applies.
+
+  pied_piper_has:
+    text: >-
+      Pied Piper has a data connection and no exclusion, so the CRA applies.
+
+  answers_saved_audit:
+    text: >-
+      The answers are saved as audit evidence, and the five step wizard opens.
+      Step one pulls the manufacturer from your workspace Parties.
+
+  pick_product_category:
+    text: >-
+      Pick the product category. It decides which conformity procedure you can
+      use.
+
+  choose_eu_markets:
+    text: >-
+      Choose the EU markets. The support period is already filled in from the
+      product's lifecycle, so next you describe what the product is for.
+
+  record_manufacturer_established:
+    text: >-
+      Record that the manufacturer is established in the EU, then save and
+      continue.
+
+  step_two_confirms:
+    text: >-
+      Step two confirms every component has an SBOM, and shows its BSI TR-03183
+      status when that check is on.
+
+  four_components_four:
+    text: >-
+      Four components, four SBOMs. On to security.
+
+  step_three_annex:
+    text: >-
+      Step three is the Annex I security checklist. Each requirement is satisfied,
+      not satisfied, or not applicable with a written reason.
+
+  last_two_answers:
+    text: >-
+      The last two answers clear the unanswered count.
+
+  vulnerability_handling_sets:
+    text: >-
+      Vulnerability handling sets your disclosure policy, security.txt, and how
+      fast you acknowledge a report.
+
+  incident_reporting_names:
+    text: >-
+      Incident reporting names the CSIRT you notify under Article 14.
+
+  step_four_collects:
+    text: >-
+      Step four collects what users must be told: how they get updates, how long
+      support lasts, and how to delete their data.
+
+  step_five_review:
+    text: >-
+      Step five is review and export. The summary shows every step and control
+      accounted for.
+
+  sign_declaration_conformity:
+    text: >-
+      Sign the Declaration of Conformity with the place, your name and your
+      role. The signature is embedded in the generated document.
+
+  generate_documents_disclosure:
+    text: >-
+      Then generate the documents: the disclosure policy, security.txt, incident
+      reports, user instructions, and the declaration.
+
+  every_document_current:
+    text: >-
+      Every document is now current.
+
+  export_compliance_bundle:
+    text: >-
+      Export the compliance bundle: every document, the SBOMs, and the OSCAL
+      results, with an integrity manifest.
+
+  mark_assessment_complete:
+    text: >-
+      Then mark the assessment complete to lock in the results.
+
+  bundle_lists_each:
+    text: >-
+      The bundle lists each file with the CRA article it answers, plus a checksum
+      to verify it.
+
+  product_s_public:
+    text: >-
+      On the product's public Trust Center page, customers now find the disclosure
+      policy and the declaration.
+
+  vulnerability_disclosure_policy:
+    text: >-
+      The vulnerability disclosure policy tells researchers how to report an issue
+      and what to expect.
+
+  signed_eu_declaration:
+    text: >-
+      And the signed EU Declaration of Conformity is published, always matching
+      your latest assessment.
+
+  cra_scope_public:
+    text: >-
+      That is the CRA, from scope to a public declaration, in one place.

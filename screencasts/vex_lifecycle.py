@@ -1,146 +1,208 @@
-"""Record the VEX lifecycle screencast — generate → upload → suppress → publish,
-including VEX versioning (a re-issued VEX supersedes the previous one).
+"""Record the VEX lifecycle screencast: where a VEX comes from, and what customers see.
 
-Drives the full producer-to-consumer journey for hand-authored CycloneDX VEX:
+Most VEX in sbomify is never written by hand. This recording tells the whole
+story on one component, Compression Core Library, whose scan found two
+criticals and two highs:
 
-1. **The vulnerability.** Open the component. Its scan flagged a critical, a high
-   and a medium.
-2. **VEX v1.** Show the CycloneDX VEX (version 1) that marks the critical
-   ``not_affected``, upload it, and watch the critical drop from the component's
-   severity counts. The public Trust Center shows one finding suppressed.
-3. **VEX v2 (versioning).** Show a re-issued VEX (version 2) that also clears the
-   high. sbomify applies a component's newest VEX, so uploading v2 supersedes v1:
-   the high now drops too and the Trust Center shows two findings suppressed, with
-   the newer VEX downloadable.
+1. **Built in.** A person triages libwebp's critical in the app (Not affected,
+   code not reachable). sbomify writes the component's VEX itself; the new VEX
+   shows on the component's Latest versions card and its page lists what it
+   suppresses.
+2. **AI agent.** An agent holding an AI agent token rules the OpenSSL high not
+   affected. Applying it directly is refused (403); sending it with
+   ``review=true`` is accepted (202). A person approves it on the
+   Vulnerabilities Review tab, and the ruling lands in the same VEX.
+3. **Upload.** A VEX produced by another tool clears the krb5 high: Upload VEX,
+   the dry-run preview, Apply.
+4. **Trust Center.** The public release page shows three suppressed by VEX, the
+   zlib critical still open, and one VEX download carrying every decision.
 
-Two infrastructure notes:
+Every agent call goes through Django's test client with a token made with the
+AI agent preset, so the status codes in the console are the API's own.
 
-1. **S3 short-circuit.** The screencast compose stack runs no S3 service, so a
-   real upload would fail at ``put_object``. We back S3 with an in-memory dict:
-   ``upload_data_as_file`` stores the bytes and ``get_file_data`` returns them.
-   Both halves are needed. No-oping only the put would let the upload succeed
-   while ``build_release_vex`` got nothing back from ``get_sbom_data``, so the
-   Trust Center's "Download latest VEX" link would 404 on camera.
-2. **Re-annotation runs the real engine, fed directly.** In production, uploading
-   a VEX enqueues a job that reads the VEX from S3 and re-annotates the stored
-   scan. With no S3 the job cannot fetch the bytes, so ``_apply_vex`` runs the
-   same engine functions (``derive_vex_suppressions`` + ``reapply_vex_to_stored_result``)
-   on the in-memory VEX document. The suppression and rebuilt counts are the real
-   engine's output — only the S3 round-trip is skipped.
+Seeding (preconditions only): a public Pied Piper workspace with a public
+product, release v2.1.0 and one completed OSV scan projected into finding rows
+with the real ``sync_findings``, the KEV cache primed, and the agent's token.
+S3 is backed by a dict. The jobs the stub broker never runs (the ruling's impact
+count, and re-applying VEX after a decision or upload) are run in-process.
 """
 
-import html as html_lib
+from __future__ import annotations
+
 import json
+import re
+import uuid
+from datetime import datetime, timedelta, timezone
+from typing import Any
 
 import pytest
+from django.contrib.auth.base_user import AbstractBaseUser
+from django.core.cache import cache
+from django.test import Client
 from django.urls import reverse
 from playwright.sync_api import Page
 
 from conftest import (
-    click_into_row,
+    agent_console,
+    agent_console_append,
+    auto_dismiss_toasts,
+    close_agent_console,
     hover_and_click,
+    install_dict_backed_s3,
+    mock_vuln_trends,
+    narrate,
     navigate_to_components,
     pace,
+    rewrite_localhost_urls,
+    settle,
+    sidebar_link,
     smooth_scroll,
     start_on_dashboard,
+    type_text,
 )
+from sbomify.apps.access_tokens.models import AccessToken
+from sbomify.apps.access_tokens.utils import create_personal_access_token
+from sbomify.apps.core import authz
 from sbomify.apps.core.models import Release, ReleaseArtifact
 from sbomify.apps.core.object_store import StorageClient
-from sbomify.apps.plugins.models import AssessmentRun
+from sbomify.apps.plugins.models import AssessmentRun, TeamPluginSettings
+from sbomify.apps.plugins.sdk.enums import RunReason
 from sbomify.apps.sboms.models import SBOM, Component, Product
 from sbomify.apps.teams.models import Workspace
 
 COMPONENT_NAME = "Compression Core Library"
 PRODUCT_NAME = "Pied Piper Compression Engine"
 SBOM_NAME = "com.piedpiper/compression-core"
+VERSION = "2.1.0"
 VEX_FILENAME = "compression-core-2.1.0.vex.cdx.json"
 
-CRITICAL_CVE = "CVE-2024-12345"
-HIGH_CVE = "CVE-2024-45210"
+OPEN_CVE = "CVE-2023-45853"  # zlib, critical: real, and left open
+TRIAGE_CVE = "CVE-2023-4863"  # libwebp, critical: a person triages it
+AGENT_CVE = "CVE-2024-6119"  # openssl, high: an AI agent proposes a ruling
+UPLOAD_CVE = "CVE-2024-37371"  # krb5, high: cleared by an uploaded VEX
 
-# Raw scan findings for the release's SBOM before any VEX: one critical, one
-# high, one medium. Shapes mirror what a security scanner stores.
-RAW_FINDINGS = [
-    {
-        "id": CRITICAL_CVE,
-        "severity": "critical",
-        "title": "Server-side request forgery in requests",
-        "component": {"name": "requests", "version": "2.32.3", "purl": "pkg:pypi/requests@2.32.3"},
-    },
-    {
-        "id": HIGH_CVE,
-        "severity": "high",
-        "title": "Improper certificate validation in urllib3",
-        "component": {"name": "urllib3", "version": "2.0.7", "purl": "pkg:pypi/urllib3@2.0.7"},
-    },
-    {
-        "id": "CVE-2024-33210",
-        "severity": "medium",
-        "title": "Prototype pollution in lodash",
-        "component": {"name": "lodash", "version": "4.17.20", "purl": "pkg:npm/lodash@4.17.20"},
-    },
+# (cve, package, version, purl, severity, cvss, fixed)
+FINDINGS = [
+    (OPEN_CVE, "zlib", "1.2.13", "pkg:generic/zlib@1.2.13", "critical", 9.8, "1.3"),
+    (TRIAGE_CVE, "libwebp", "1.2.4", "pkg:generic/libwebp@1.2.4", "critical", 8.8, "1.3.2"),
+    (UPLOAD_CVE, "krb5", "1.20.1", "pkg:generic/krb5@1.20.1", "high", 8.1, "1.21.3"),
+    (AGENT_CVE, "openssl", "3.0.13", "pkg:generic/openssl@3.0.13", "high", 7.5, "3.0.15"),
 ]
 
+AGENT_TOKEN_NAME = "Claude Code"  # nosec B105 - the token's label, not a secret
+API_BASE = "https://app.sbomify.com/api/v2/vulnerability-scanning"
 
-def _vex_document(version: int, vulnerabilities: list[dict]) -> dict:
-    return {
+TRIAGE_DETAIL = "libwebp is linked for thumbnail sizes only. The vulnerable decoder is never called."
+
+AGENT_RULING = {
+    "decisions": [
+        {
+            "vuln_id": AGENT_CVE,
+            "purl": "pkg:generic/openssl@3.0.13",
+            "state": "not_affected",
+            "justification": "code_not_reachable",
+            "detail": "Compression Core never verifies certificate names. TLS ends at the gateway.",
+        }
+    ],
+    "context": (
+        "I searched the source for X509_VERIFY_PARAM and every TLS call. The library only hashes with "
+        "OpenSSL, so the name check this advisory is about is never reached."
+    ),
+}
+
+# What another tool produced for krb5: a CycloneDX VEX for this version.
+UPLOADED_VEX = json.dumps(
+    {
         "bomFormat": "CycloneDX",
         "specVersion": "1.6",
         "serialNumber": "urn:uuid:11111111-2222-3333-4444-555555555555",
-        "version": version,
+        "version": 1,
         "metadata": {
             "timestamp": "2026-04-29T00:00:00Z",
-            "component": {"type": "application", "name": SBOM_NAME, "version": "2.1.0"},
+            "component": {"type": "application", "name": SBOM_NAME, "version": VERSION},
         },
-        "vulnerabilities": vulnerabilities,
+        "vulnerabilities": [
+            {
+                "id": UPLOAD_CVE,
+                "source": {"name": "NVD"},
+                "ratings": [{"severity": "high"}],
+                "affects": [{"ref": "pkg:generic/krb5@1.20.1"}],
+                "analysis": {
+                    "state": "not_affected",
+                    "justification": "requires_configuration",
+                    "detail": "GSS message token handling is disabled in this build.",
+                },
+            }
+        ],
+    },
+    indent=2,
+).encode("utf-8")
+
+
+def _security_result(scanned_at: datetime) -> dict[str, Any]:
+    """One OSV ``AssessmentRun.result`` in the schema the plugin SDK emits."""
+    findings = [
+        {
+            "id": cve,
+            "title": f"{package} {version} is affected by {cve}",
+            "description": f"{package} {version} is affected by {cve}. Upgrade to {fixed} or later.",
+            "severity": severity,
+            "status": "fail",
+            "cvss_score": cvss,
+            "fixed_version": fixed,
+            "source": "osv",
+            "component": {"name": package, "version": version, "purl": purl, "ecosystem": "generic"},
+        }
+        for cve, package, version, purl, severity, cvss, fixed in FINDINGS
+    ]
+    by_severity = {
+        level: sum(1 for f in findings if f["severity"] == level) for level in ("critical", "high", "medium", "low")
+    }
+    by_severity["info"] = 0
+    return {
+        "schema_version": "1.0",
+        "plugin_name": "osv",
+        "plugin_version": "1.0.0",
+        "category": "security",
+        "assessed_at": scanned_at.isoformat(),
+        "summary": {
+            "total_findings": len(findings),
+            "pass_count": 0,  # nosec B105 - a count, not a credential
+            "fail_count": len(findings),
+            "warning_count": 0,
+            "error_count": 0,
+            "by_severity": by_severity,
+        },
+        "findings": findings,
+        "metadata": {"scanner": "osv-scanner", "provider": "osv"},
     }
 
 
-_CRITICAL_STATEMENT = {
-    "id": CRITICAL_CVE,
-    "source": {"name": "NVD"},
-    "ratings": [{"severity": "critical"}],
-    "affects": [{"ref": "pkg:pypi/requests@2.32.3"}],
-    "analysis": {
-        "state": "not_affected",
-        "justification": "code_not_reachable",
-        "detail": (
-            "requests is only used for outbound HTTPS to a fixed allowlist; "
-            "the vulnerable redirect path is never exercised."
-        ),
-    },
-}
-_HIGH_STATEMENT = {
-    "id": HIGH_CVE,
-    "source": {"name": "NVD"},
-    "ratings": [{"severity": "high"}],
-    "affects": [{"ref": "pkg:pypi/urllib3@2.0.7"}],
-    "analysis": {
-        "state": "not_affected",
-        "justification": "protected_by_mitigating_control",
-        "detail": (
-            "TLS verification is pinned and enforced at the gateway, so the weak certificate path cannot be reached."
-        ),
-    },
-}
-
-# v1 clears the critical; v2 is re-issued (version 2) and also clears the high.
-VEX_V1 = _vex_document(1, [_CRITICAL_STATEMENT])
-VEX_V2 = _vex_document(2, [_CRITICAL_STATEMENT, _HIGH_STATEMENT])
-
-
-def _vex_bytes(document: dict) -> bytes:
-    return json.dumps(document, indent=2).encode("utf-8")
-
-
 @pytest.fixture
-def vex_release(deletable_team: Workspace) -> dict:
-    """Seed a public release whose scanned SBOM has an unmitigated critical."""
-    component = Component.objects.create(team=deletable_team, name=COMPONENT_NAME)
+def vex_release(
+    sample_user: AbstractBaseUser, deletable_team: Workspace, monkeypatch: pytest.MonkeyPatch, settings: Any
+) -> dict:
+    """A public release whose scanned SBOM has two criticals and two highs, and an AI agent token."""
+    from sbomify.apps.vulnerability_scanning.findings import sync_findings
 
+    install_dict_backed_s3(monkeypatch)
+    # The triage and fix prompts peek at the stored SBOM for a repository hint;
+    # there is no SBOM bucket here, and the miss costs seconds of retries.
+    monkeypatch.setattr(StorageClient, "get_sbom_data_prefix", lambda self, name, limit: None)
+    settings.APP_BASE_URL = "https://app.sbomify.com"
+
+    team = deletable_team
+    team.is_public = True
+    team.publish_vulnerability_posture = True
+    team.save(update_fields=["is_public", "publish_vulnerability_posture"])
+    TeamPluginSettings.objects.update_or_create(team=team, defaults={"enabled_plugins": ["osv"]})
+    # libwebp's CVE-2023-4863 is in CISA's KEV catalog; prime the cache the pages read.
+    cache.set("cisa-kev-cve-ids", frozenset({TRIAGE_CVE.lower()}), 24 * 60 * 60)
+
+    component = Component.objects.create(team=team, name=COMPONENT_NAME, visibility=Component.Visibility.PUBLIC)
     sbom = SBOM.objects.create(
         name=SBOM_NAME,
-        version="2.1.0",
+        version=VERSION,
         format="cyclonedx",
         format_version="1.6",
         sbom_filename="compression-core-2.1.0.cdx.json",
@@ -148,259 +210,286 @@ def vex_release(deletable_team: Workspace) -> dict:
         bom_type=SBOM.BomType.SBOM,
         component=component,
     )
-
     product = Product.objects.create(
-        team=deletable_team,
+        team=team,
         name=PRODUCT_NAME,
         description="Middle-out compression platform for enterprise data optimization",
         is_public=True,
     )
     product.components.set([component])
-
-    release = Release.objects.create(product=product, name="v2.1.0", version="2.1.0")
+    release = Release.objects.create(product=product, name=f"v{VERSION}", version=VERSION)
     ReleaseArtifact.objects.create(release=release, sbom=sbom)
 
+    scanned_at = datetime.now(tz=timezone.utc) - timedelta(hours=2)
     run = AssessmentRun.objects.create(
+        id=uuid.uuid4(),
         sbom=sbom,
         plugin_name="osv",
         plugin_version="1.0.0",
-        plugin_config_hash="",
+        plugin_config_hash="0" * 64,
         category="security",
-        run_reason="on_upload",
+        run_reason=RunReason.ON_UPLOAD.value,
         status="completed",
-        result={
-            "findings": [dict(f) for f in RAW_FINDINGS],
-            "summary": {
-                "by_severity": {"critical": 1, "high": 1, "medium": 1, "low": 0},
-                "total_findings": 3,
-                "suppressed_count": 0,
-            },
-        },
+        started_at=scanned_at,
+        completed_at=scanned_at,
+        input_content_digest="0" * 64,
+        result=_security_result(scanned_at),
+        result_schema_version="1.0",
+    )
+    AssessmentRun.objects.filter(pk=run.pk).update(created_at=scanned_at)
+    run.refresh_from_db()
+    sync_findings(run)
+
+    # The token a person made with the AI agent preset and gave to Claude Code.
+    token = create_personal_access_token(sample_user)
+    AccessToken.objects.create(
+        user=sample_user,
+        team=team,
+        encoded_token=token,
+        description=AGENT_TOKEN_NAME,
+        scopes=authz.SCOPE_PRESETS["agent"],
+    )
+    return {"component": component, "release": release, "product": product, "agent_token": token}
+
+
+def _run_vex_reapply(component_id: Any) -> None:
+    """Run the re-apply job the stub broker queued, in-process."""
+    from sbomify.apps.vulnerability_scanning.tasks import reapply_vex_to_component_scans
+
+    reapply_vex_to_component_scans.fn(str(component_id))
+
+
+def _agent_triage(token: str, component_id: str, body: dict[str, Any], *, review: bool) -> Any:
+    """What the agent sends: the real triage endpoint, with its AI agent token."""
+    query = "?review=true" if review else ""
+    return Client().post(
+        f"/api/v2/vulnerability-scanning/components/{component_id}/triage{query}",
+        data=json.dumps(body),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
     )
 
-    return {"component": component, "release": release, "run": run, "product": product}
+
+def _curl(component_id: str, review: bool) -> list[str]:
+    query = "?review=true" if review else ""
+    return [
+        "$ curl -X POST \\",
+        f'    "{API_BASE}/components/{component_id}/triage{query}" \\',
+        '    -H "Authorization: Bearer $SBOMIFY_TOKEN" --data @ruling.json',
+    ]
 
 
-@pytest.fixture
-def s3_short_circuit(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Back S3 with a dict so uploads AND downloads work without a bucket.
-
-    No-oping only the put is not enough: ``build_release_vex`` reads each VEX
-    back through ``get_sbom_data``, so the Trust Center's "Download latest VEX"
-    link would 404 and the recording would show a broken button. Every read path
-    funnels through ``get_file_data``, so patching that one method alongside the
-    put covers SBOMs, VEX and documents.
-    """
-    store: dict[tuple[str, str], bytes] = {}
-
-    def _put(self: StorageClient, bucket_name: str, object_name: str, data: bytes) -> None:
-        store[(bucket_name, object_name)] = data
-
-    def _get(self: StorageClient, bucket_name: str, file_path: str) -> bytes | None:
-        return store.get((bucket_name, file_path))
-
-    monkeypatch.setattr(StorageClient, "upload_data_as_file", _put)
-    monkeypatch.setattr(StorageClient, "get_file_data", _get)
+def _open_row_menu(page: Page, cve: str) -> None:
+    menu = page.get_by_role("button", name=re.compile(rf"^Actions for {cve} "))
+    menu.wait_for(state="visible", timeout=15_000)
+    hover_and_click(page, menu)
+    pace(page, 500)
 
 
-def _apply_vex(component: Component, release: Release, run: AssessmentRun, document: dict) -> None:
-    """Suppress via the real VEX engine, then pin the uploaded VEX to the release.
+def _triage_vex(component: Component) -> SBOM:
+    from sbomify.apps.vulnerability_scanning.vex import TRIAGE_SOURCE
 
-    Runs ``derive_vex_suppressions`` + ``reapply_vex_to_stored_result`` on the
-    in-memory VEX document — the same functions the async job runs after reading
-    the VEX from S3 — so the annotated findings and rebuilt counts are the
-    engine's genuine output. ``reapply`` is a full recompute, so applying v2's
-    statements supersedes v1. Then attaches the component's newest VEX (the one
-    just uploaded through the UI) to the release so it's downloadable.
-    """
-    from sbomify.apps.vulnerability_scanning.vex import (
-        derive_vex_suppressions,
-        reapply_vex_to_stored_result,
+    return (
+        SBOM.objects.filter(component=component, bom_type=SBOM.BomType.VEX, source=TRIAGE_SOURCE)
+        .order_by("-created_at")
+        .first()
     )
 
-    statements = derive_vex_suppressions(document)
-    run.result = reapply_vex_to_stored_result(run.result, statements)
-    run.save(update_fields=["result"])
 
-    vex = SBOM.objects.filter(component=component, bom_type=SBOM.BomType.VEX).order_by("-created_at").first()
-    if vex is not None:
-        ReleaseArtifact.objects.get_or_create(release=release, sbom=vex)
+def _vex_url(component: Component, vex: SBOM) -> str:
+    return reverse("core:component_item", kwargs={"component_id": component.id, "item_type": "vex", "item_id": vex.id})
 
 
-def _show_vex_file(page: Page, document: dict, subtitle: str, pause_ms: int = 5000) -> None:
-    """Render the CycloneDX VEX document full-screen so viewers see its contents.
+@pytest.mark.django_db(transaction=True)
+def vex_lifecycle(vex_release: dict, recording_page: Page) -> None:
+    from sbomify.apps.vulnerability_scanning.services.vex_submissions import record_impact
 
-    The in-app VEX Documents card lists uploads but does not render their
-    contents, so the file is drawn directly via ``set_content`` as a styled
-    code view, with the decision-carrying lines highlighted.
-    """
-    escaped = html_lib.escape(json.dumps(document, indent=2))
-    for needle in (
-        "&quot;state&quot;: &quot;not_affected&quot;",
-        "&quot;justification&quot;: &quot;code_not_reachable&quot;",
-        "&quot;justification&quot;: &quot;protected_by_mitigating_control&quot;",
-        f"&quot;id&quot;: &quot;{CRITICAL_CVE}&quot;",
-        f"&quot;id&quot;: &quot;{HIGH_CVE}&quot;",
-    ):
-        escaped = escaped.replace(needle, f'<span class="hl">{needle}</span>')
-    for version in ("1", "2"):
-        escaped = escaped.replace(
-            f"&quot;version&quot;: {version},", f'<span class="hlv">&quot;version&quot;: {version}</span>,'
-        )
+    page = recording_page
+    auto_dismiss_toasts(page)
+    mock_vuln_trends(page)
+    component = vex_release["component"]
+    release = vex_release["release"]
+    product = vex_release["product"]
+    token = vex_release["agent_token"]
+    component_url = reverse("core:component_details", kwargs={"component_id": component.id})
+    public_url = reverse("core:release_details_public", kwargs={"product_id": product.id, "release_id": release.id})
 
-    content = f"""<!doctype html><html><head><meta charset="utf-8"><style>
-      * {{ box-sizing: border-box; }}
-      body {{ margin: 0; min-height: 100vh; background: #0A0A23;
-             display: flex; align-items: center; justify-content: center;
-             font-family: ui-monospace, "SF Mono", Menlo, monospace; }}
-      .win {{ width: 780px; max-width: 92vw; background: #14142e;
-             border: 1px solid #2b2b52; border-radius: 12px; overflow: hidden;
-             box-shadow: 0 24px 60px rgba(0,0,0,.5); }}
-      .bar {{ display: flex; align-items: center; gap: 10px; padding: 12px 16px;
-             background: #1c1c3d; border-bottom: 1px solid #2b2b52; }}
-      .dot {{ width: 12px; height: 12px; border-radius: 50%; }}
-      .r {{ background: #ff5f57; }} .y {{ background: #febc2e; }} .g {{ background: #28c840; }}
-      .fname {{ margin-left: 8px; color: #e6e6f0; font-size: 14px; font-weight: 600; }}
-      .badge {{ margin-left: auto; color: #a5b4fc; background: #312e81; font-size: 12px;
-               padding: 4px 10px; border-radius: 999px; }}
-      pre {{ margin: 0; padding: 20px 22px; color: #c8c8e0; font-size: 14px; line-height: 1.6;
-            max-height: 70vh; overflow: auto; }}
-      .hl {{ color: #fbbf24; font-weight: 700; }}
-      .hlv {{ color: #34d399; font-weight: 700; }}
-    </style></head><body>
-      <div class="win">
-        <div class="bar">
-          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-          <span class="fname">{html_lib.escape(VEX_FILENAME)}</span>
-          <span class="badge">{html_lib.escape(subtitle)}</span>
-        </div>
-        <pre>{escaped}</pre>
-      </div>
-    </body></html>"""
-    page.set_content(content, wait_until="load")
-    pace(page, pause_ms)
+    # The opening line plays over the dashboard and the walk to the component.
+    narrate(page, "intro")
+    start_on_dashboard(page, pause_ms=600)
+    navigate_to_components(page)
+    link = page.locator("main").get_by_role("link", name=COMPONENT_NAME, exact=True).first
+    link.wait_for(state="visible", timeout=15_000)
+    hover_and_click(page, link)
+    page.wait_for_load_state("networkidle")
+    results = page.locator("#component-vulnerabilities-table")
+    triage_row = results.locator(f"tr:has-text('{TRIAGE_CVE}')").first
+    triage_row.wait_for(state="visible", timeout=15_000)
 
+    narrate(page, "scan_found")
+    smooth_scroll(page, page.locator("#component-vulnerabilities"), 600)
+    pace(page, 1200)
 
-def _upload_vex(page: Page, document: dict) -> None:
-    """Upload a VEX through the header's ⋮ menu modal, via the dry-run preview.
-
-    The upload surface lives in a modal behind the component header's
-    meatball menu now, with a real artifact-type select; a VEX file gets a
-    dry-run preview before anything is stored, and applying it is what
-    persists — both worth having on camera.
-    """
-    more_actions = page.get_by_role("button", name="More actions")
-    more_actions.wait_for(state="visible", timeout=15_000)
-    hover_and_click(page, more_actions)
-    pace(page, 600)
-    hover_and_click(page, page.get_by_role("menuitem", name="Upload artifact"))
-    pace(page, 1000)
-
-    type_select = page.locator("#upload-bom-type")
-    type_select.wait_for(state="visible", timeout=10_000)
-    type_select.select_option("vex")
-    pace(page, 1000)
-
-    file_input = page.locator("#upload-sbom input[type='file']")
-    with page.expect_response(lambda r: "/vex-preview" in r.url and r.status == 200, timeout=15_000):
-        file_input.set_input_files(
-            files=[{"name": VEX_FILENAME, "mimeType": "application/json", "buffer": _vex_bytes(document)}]
-        )
-    page.locator("text=Preview — nothing stored yet").first.wait_for(state="visible", timeout=10_000)
+    # ── 1. Built in: a person triages, sbomify writes the VEX ────────────
+    narrate(page, "team_checks_libwebp")
+    triage_row.hover()
     pace(page, 2500)
 
-    apply_btn = page.locator("button:has-text('Apply this VEX')")
+    narrate(page, "triage_not_affected")
+    _open_row_menu(page, TRIAGE_CVE)
+    hover_and_click(page, page.get_by_role("menuitem", name="Triage"))
+    modal = page.locator("#triage-modal")
+    modal.get_by_text("Applies to").wait_for(state="visible", timeout=15_000)
+    state = page.locator("#triage-state")
+    hover_and_click(page, state)
+    state.select_option("not_affected")
+    justification = page.locator("#triage-justification")
+    hover_and_click(page, justification)
+    justification.select_option("code_not_reachable")
+    detail = page.locator("#triage-detail")
+    hover_and_click(page, detail)
+    type_text(detail, TRIAGE_DETAIL, delay=20)
+
+    narrate(page, "save_writes_vex")
+    with page.expect_response(lambda r: "/triage" in r.url and r.request.method == "POST", timeout=20_000) as resp:
+        hover_and_click(page, modal.get_by_role("button", name="Save decision"))
+    assert resp.value.ok, resp.value.text()
+    _run_vex_reapply(component.id)
+    pace(page, 800)
+    page.goto(component_url)
+    page.wait_for_load_state("networkidle")
+    versions = page.get_by_role("table", name="Versions")
+    versions.wait_for(state="visible", timeout=15_000)
+    vex_row = versions.locator("tr", has_text="VEX").first
+    vex_row.wait_for(state="visible", timeout=15_000)
+    vex_row.hover()
+    pace(page, 1500)
+
+    narrate(page, "vex_on_component")
+    hover_and_click(page, vex_row.get_by_role("link").first)
+    page.wait_for_load_state("networkidle")
+    suppressed = page.locator("main").get_by_text(TRIAGE_CVE).first
+    suppressed.wait_for(state="visible", timeout=15_000)
+    smooth_scroll(page, suppressed, 600)
+    suppressed.hover()
+    settle(page)
+
+    # ── 2. AI agent: proposes, a person approves ─────────────────────────
+    agent_console(
+        page,
+        f'Claude Code · API token "{AGENT_TOKEN_NAME}" (AI agent)',
+        ["# OpenSSL CVE-2024-6119 is not reachable. Apply the ruling:", *_curl(component.id, review=False)],
+    )
+    narrate(page, "agent_tries_apply")
+    refused = _agent_triage(token, component.id, AGENT_RULING | {"context": ""}, review=False)
+    assert refused.status_code == 403, refused.content
+    # The refusal appears only once the line has said the agent tries.
+    settle(page)
+    agent_console_append(page, "HTTP/1.1 403 Forbidden", json.dumps({"detail": refused.json()["detail"]}))
+
+    narrate(page, "agent_refused")
+    pace(page, 2600)
+    agent_console_append(page, "", "# Send it for a person to approve instead:", *_curl(component.id, review=True))
+    sent = _agent_triage(token, component.id, AGENT_RULING, review=True)
+    assert sent.status_code == 202, sent.content
+    record_impact(sent.json()["id"])
+    settle(page)
+
+    narrate(page, "agent_sends_review")
+    pace(page, 300)
+    agent_console_append(page, "HTTP/1.1 202 Accepted", json.dumps({"id": sent.json()["id"], "status": "pending"}))
+    settle(page)
+
+    narrate(page, "ruling_waits_review")
+    close_agent_console(page)
+    hover_and_click(page, sidebar_link(page, "Vulnerabilities"))
+    page.wait_for_load_state("networkidle")
+    review_tab = page.get_by_role("link", name=re.compile(r"^Review"))
+    review_tab.wait_for(state="visible", timeout=15_000)
+    hover_and_click(page, review_tab)
+    page.wait_for_load_state("networkidle")
+    review = page.locator("#vex-review")
+    approve = review.get_by_role("button", name="Approve").first
+    approve.wait_for(state="visible", timeout=15_000)
+    review.get_by_text("AI agent").first.hover()
+    pace(page, 1200)
+    smooth_scroll(page, review.locator("li li").first, 600)
+
+    narrate(page, "approve_same_vex")
+    with page.expect_response(lambda r: "/review/decide/" in r.url, timeout=20_000):
+        hover_and_click(page, approve)
+    review.get_by_text("Nothing waiting").wait_for(state="visible", timeout=15_000)
+    _run_vex_reapply(component.id)
+    pace(page, 600)
+    page.goto(_vex_url(component, _triage_vex(component)))
+    page.wait_for_load_state("networkidle")
+    agent_row = page.locator("main").get_by_text(AGENT_CVE).first
+    agent_row.wait_for(state="visible", timeout=15_000)
+    smooth_scroll(page, agent_row, 600)
+    agent_row.hover()
+    settle(page)
+
+    # ── 3. Upload: VEX another tool produced ─────────────────────────────
+    narrate(page, "upload_other_tool")
+    page.goto(component_url)
+    page.wait_for_load_state("networkidle")
+    actions = page.get_by_role("button", name="Component actions")
+    actions.wait_for(state="visible", timeout=15_000)
+    actions.hover()
+    settle(page)
+
+    narrate(page, "upload_from_menu")
+    hover_and_click(page, actions)
+    pace(page, 300)
+    hover_and_click(page, page.get_by_role("menuitem", name="Upload VEX"))
+    file_input = page.locator("#upload-sbom input[type='file']")
+    file_input.wait_for(state="attached", timeout=10_000)
+    pace(page, 400)
+    with page.expect_response(lambda r: "/vex-preview" in r.url and r.status == 200, timeout=15_000):
+        file_input.set_input_files(
+            files=[{"name": VEX_FILENAME, "mimeType": "application/json", "buffer": UPLOADED_VEX}]
+        )
+    page.get_by_text("Preview: nothing stored yet").first.wait_for(state="visible", timeout=10_000)
+
+    narrate(page, "preview_first")
+    apply_btn = page.get_by_role("button", name="Apply this VEX")
+    apply_btn.hover()
+    settle(page)
+
+    narrate(page, "apply_closes")
     with page.expect_response(
         lambda r: "/api/v1/sboms/upload-file/" in r.url and r.status == 201,
         timeout=15_000,
     ):
         hover_and_click(page, apply_btn)
-    pace(page, 1500)
-
-
-def _show_component_posture(page: Page, component_url: str, struck_cves: list[str], hold_ms: int = 4000) -> None:
-    """Land on the component's vulnerabilities table and show the VEX effect.
-
-    The table strikes a suppressed finding's severity badge through, so the
-    proof on camera is each cleared CVE's row rendering with line-through.
-    """
+    uploaded = (
+        (SBOM.objects.filter(component=component, bom_type=SBOM.BomType.VEX).exclude(source="sbomify-triage"))
+        .order_by("-created_at")
+        .first()
+    )
+    ReleaseArtifact.objects.get_or_create(release=release, sbom=uploaded)
+    _run_vex_reapply(component.id)
+    pace(page, 600)
     page.goto(component_url)
     page.wait_for_load_state("networkidle")
-    anchor = page.locator(f"tr:has-text('{CRITICAL_CVE}')").first
-    anchor.wait_for(state="visible", timeout=15_000)
-    pace(page, 1500)
-    smooth_scroll(page, anchor, 1500)
-    for cve in struck_cves:
-        struck = page.locator(f"tr:has-text('{cve}') .line-through").first
-        struck.wait_for(state="visible", timeout=10_000)
-    pace(page, hold_ms)
+    open_row = page.locator(f"#component-vulnerabilities-table tr:has-text('{OPEN_CVE}')").first
+    open_row.wait_for(state="visible", timeout=15_000)
+    smooth_scroll(page, page.locator("#component-vulnerabilities"), 600)
+    open_row.hover()
+    settle(page)
 
-
-def _show_trust_center(page: Page, public_url: str, show_download: bool) -> None:
-    """Land on the public Trust Center release page and reveal the VEX-applied posture."""
+    # ── 4. What customers see ────────────────────────────────────────────
+    narrate(page, "trust_center")
     page.goto(public_url)
     page.wait_for_load_state("networkidle")
-
-    posture_heading = page.locator("h4:has-text('Vulnerability Posture')")
-    posture_heading.wait_for(state="visible", timeout=15_000)
-    smooth_scroll(page, posture_heading, 2000)
-
-    suppression_note = page.locator("text=suppressed by VEX").first
-    suppression_note.wait_for(state="visible", timeout=10_000)
-    smooth_scroll(page, suppression_note, 3000)
-
-    if show_download:
-        vex_download = page.locator("a[title='Download latest VEX (CycloneDX)']").first
-        vex_download.wait_for(state="visible", timeout=10_000)
-        smooth_scroll(page, vex_download, 1200)
-        vex_download.hover()
-        pace(page, 2500)
-
-
-@pytest.mark.django_db(transaction=True)
-def vex_lifecycle(recording_page: Page, vex_release: dict, s3_short_circuit: None) -> None:
-    page = recording_page
-
-    component = vex_release["component"]
-    release = vex_release["release"]
-    run = vex_release["run"]
-    product = vex_release["product"]
-    component_url = reverse("core:component_details", kwargs={"component_id": component.id})
-    public_url = reverse(
-        "core:release_details_public",
-        kwargs={"product_id": product.id, "release_id": release.id},
-    )
-
-    start_on_dashboard(page)
-
-    # ── 1. The vulnerability — the component's scan flagged a critical ───
-    navigate_to_components(page)
-    click_into_row(page, COMPONENT_NAME)
-    critical_row = page.locator(f"tr:has-text('{CRITICAL_CVE}')").first
-    critical_row.wait_for(state="visible", timeout=15_000)
+    rewrite_localhost_urls(page)
+    posture = page.get_by_text("suppressed by VEX").first
+    posture.wait_for(state="visible", timeout=15_000)
+    smooth_scroll(page, posture, 600)
     pace(page, 1500)
-    smooth_scroll(page, critical_row, 4000)
 
-    # ── 2. VEX v1 — show the file, upload it, watch the critical clear ───
-    _show_vex_file(page, VEX_V1, "CycloneDX VEX · version 1 — clears the critical", 5500)
-
-    page.goto(component_url)
-    page.wait_for_load_state("networkidle")
-    pace(page, 800)
-    _upload_vex(page, VEX_V1)
-
-    _apply_vex(component, release, run, VEX_V1)
-    _show_component_posture(page, component_url, [CRITICAL_CVE])  # critical struck through
-    _show_trust_center(page, public_url, show_download=False)  # 1 finding suppressed
-
-    # ── 3. VEX v2 — re-issue a newer version that also clears the high ───
-    _show_vex_file(page, VEX_V2, "CycloneDX VEX · version 2 — re-issued, also clears the high", 5500)
-
-    page.goto(component_url)
-    page.wait_for_load_state("networkidle")
-    pace(page, 800)
-    _upload_vex(page, VEX_V2)
-
-    _apply_vex(component, release, run, VEX_V2)
-    _show_component_posture(page, component_url, [CRITICAL_CVE, HIGH_CVE])  # both struck through
-    _show_trust_center(page, public_url, show_download=True)  # 2 findings suppressed
+    narrate(page, "download_one_vex")
+    download = page.locator("a[title='Download latest VEX (CycloneDX)']").first
+    download.wait_for(state="visible", timeout=10_000)
+    smooth_scroll(page, download, 300)
+    download.hover()

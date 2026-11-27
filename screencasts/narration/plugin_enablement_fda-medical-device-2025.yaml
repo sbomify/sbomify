@@ -1,0 +1,31 @@
+# Narration for screencasts/plugin_enablement.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Here is how to turn on the FDA Medical Device Cybersecurity check in
+      sbomify.
+
+  open_plugins:
+    text: >-
+      Open Plugins from the sidebar. Plugins are grouped into compliance, security
+      and attestation.
+
+  about:
+    text: >-
+      It checks SBOMs against the 2025 FDA guidance for medical device
+      submissions, including support status and end of support dates.
+
+  tick_save:
+    text: >-
+      Tick the plugin, then scroll down and save your changes.
+
+  done:
+    text: >-
+      The FDA check is on. Every new SBOM upload now gets a compliance result.
+
+  changes_apply:
+    text: >-
+      Changes apply to new uploads. Results you already have are kept.

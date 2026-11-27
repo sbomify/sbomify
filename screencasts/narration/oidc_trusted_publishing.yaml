@@ -1,0 +1,46 @@
+# Narration for screencasts/oidc_trusted_publishing.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Here is how to let GitHub Actions upload SBOMs to sbomify with no API token
+      to store or rotate.
+
+  open_component_choose:
+    text: >-
+      Open the component, then choose Trusted publishers from its actions menu.
+
+  enter_github_repository:
+    text: >-
+      Enter the GitHub repository whose workflows may publish here.
+
+  binding_pins_repository:
+    text: >-
+      The binding pins the repository's permanent IDs, so a renamed or recreated
+      repository cannot take over.
+
+  add_step_workflow:
+    text: >-
+      Add this step to your workflow. It trades the GitHub token for a short-lived
+      sbomify token, then uploads.
+
+  workflow_running_first:
+    text: >-
+      Here is that workflow running. First, the runner asks GitHub for an OIDC
+      token.
+
+  sbomify_checks_token:
+    text: >-
+      sbomify checks the token against the binding and returns its own, valid for
+      15 minutes.
+
+  runner_uploads_sbom:
+    text: >-
+      Then the runner uploads the SBOM with it.
+
+  new_version_component:
+    text: >-
+      The new version is on the component, uploaded by the workflow with no stored
+      secret.
