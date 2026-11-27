@@ -104,8 +104,8 @@ urlpatterns = [
     path("api/v2/", api_v2.urls, name="api-2"),
     # Liveness for the reverse proxy: answers without touching the database, so a
     # database outage does not take every backend out of rotation with it.
-    path("UuPha8mu/live/", liveness, name="liveness"),
-    path(r"UuPha8mu/", include("health_check.urls")),  # Random string
+    path(f"{settings.HEALTH_CHECK_PATH.lstrip('/')}live/", liveness, name="liveness"),
+    path(settings.HEALTH_CHECK_PATH.lstrip("/"), include("health_check.urls")),
 ]
 
 if settings.DEBUG:
