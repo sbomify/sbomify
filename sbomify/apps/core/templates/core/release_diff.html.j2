@@ -1,0 +1,163 @@
+{% extends "core/dashboard_base.htmx.j2" %}
+{% block title %}sbomify Release diff: {{ from_release.name }} → {{ to_release.name }}{% endblock %}
+{% block content %}
+    <div class="space-y-6">
+        {# Header #}
+        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+            <div class="flex items-start gap-4">
+                <div class="tw-avatar tw-avatar-lg">
+                    <i class="fas fa-code-compare"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <h1 class="text-2xl font-bold text-text m-0">
+                        {{ from_release.name }} <span class="text-text-muted font-normal">→</span> {{ to_release.name }}
+                    </h1>
+                    <nav aria-label="breadcrumb" class="mt-1">
+                        <ol class="flex items-center gap-2 text-sm text-text-muted">
+                            <li>
+                                <a href="{% url 'core:product_details' product.id %}"
+                                   class="text-primary hover:underline no-underline">{{ product.name }}</a>
+                            </li>
+                            <li>/</li>
+                            <li>
+                                <a href="{% url 'core:release_details' product.id to_release.id %}"
+                                   class="text-primary hover:underline no-underline">{{ to_release.name }}</a>
+                            </li>
+                            <li>/</li>
+                            <li class="text-text" aria-current="page">compared with {{ from_release.name }}</li>
+                        </ol>
+                    </nav>
+                </div>
+            </div>
+            <div class="flex-shrink-0 flex items-center gap-2">
+                <label for="diff-baseline" class="text-sm text-text-muted">Compare against</label>
+                <select id="diff-baseline"
+                        class="tw-form-select"
+                        onchange="if (this.value) window.location.href = this.value">
+                    {% for sibling in sibling_releases %}
+                        <option value="{% url 'core:release_diff' product.id to_release.id sibling.id %}"
+                                {% if sibling.id == from_release.id %}selected{% endif %}>{{ sibling.name }}</option>
+                    {% endfor %}
+                </select>
+                <a href="{% url 'core:release_diff' product.id from_release.id to_release.id %}"
+                   class="tw-btn-secondary tw-btn-sm"
+                   title="Swap direction"
+                   aria-label="Swap comparison direction">
+                    <i class="fas fa-right-left" aria-hidden="true"></i>
+                </a>
+            </div>
+        </div>
+        {% if diff.unreadable_artifacts %}
+            <div class="tw-alert tw-alert-warning">
+                <i class="fas fa-triangle-exclamation tw-alert-icon" aria-hidden="true"></i>
+                <div class="tw-alert-content">
+                    <p class="text-sm m-0">
+                        {{ diff.unreadable_artifacts|length }} pinned artifact{{ diff.unreadable_artifacts|length|pluralize }} could not be read
+                        ({{ diff.unreadable_artifacts|join:", " }}) — the delta below may be incomplete.
+                    </p>
+                </div>
+            </div>
+        {% endif %}
+        {# Count strip #}
+        <div class="flex flex-wrap gap-3">
+            <span class="tw-badge-success">{{ diff.counts.added }} added</span>
+            <span class="tw-badge-danger">{{ diff.counts.removed }} removed</span>
+            <span class="tw-badge-secondary">{{ diff.counts.changed }} version changes</span>
+            <span class="tw-badge-danger">{{ diff.counts.introduced }} vulnerabilities introduced</span>
+            <span class="tw-badge-success">{{ diff.counts.resolved }} vulnerabilities resolved</span>
+        </div>
+        {# Components #}
+        <div class="tw-settings-card">
+            <div class="px-6 py-4 border-b border-border">
+                <h5 class="text-lg font-semibold text-text m-0">Components</h5>
+            </div>
+            <div class="p-6 space-y-6">
+                {% if not diff.components.added and not diff.components.removed and not diff.components.changed %}
+                    <p class="text-text-muted m-0">No component changes between these releases.</p>
+                {% endif %}
+                {% if diff.components.added %}
+                    <div>
+                        <h6 class="text-sm font-semibold uppercase tracking-wider text-success mb-2">Added</h6>
+                        <ul class="m-0 pl-0 list-none space-y-1">
+                            {% for entry in diff.components.added %}
+                                <li class="text-sm text-text">
+                                    <i class="fas fa-plus text-success mr-2 text-xs" aria-hidden="true"></i>
+                                    {{ entry.name }} <span class="text-text-muted">{{ entry.version }}</span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+                {% if diff.components.removed %}
+                    <div>
+                        <h6 class="text-sm font-semibold uppercase tracking-wider text-danger mb-2">Removed</h6>
+                        <ul class="m-0 pl-0 list-none space-y-1">
+                            {% for entry in diff.components.removed %}
+                                <li class="text-sm text-text">
+                                    <i class="fas fa-minus text-danger mr-2 text-xs" aria-hidden="true"></i>
+                                    {{ entry.name }} <span class="text-text-muted">{{ entry.version }}</span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+                {% if diff.components.changed %}
+                    <div>
+                        <h6 class="text-sm font-semibold uppercase tracking-wider text-text-muted mb-2">Version changes</h6>
+                        <ul class="m-0 pl-0 list-none space-y-1">
+                            {% for entry in diff.components.changed %}
+                                <li class="text-sm text-text">
+                                    <i class="fas fa-arrow-up text-text-muted mr-2 text-xs"
+                                       aria-hidden="true"></i>
+                                    {{ entry.name }}
+                                    <span class="text-text-muted">{{ entry.from_version }}</span>
+                                    <span class="text-text-muted">→</span>
+                                    <span class="font-medium">{{ entry.to_version }}</span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        {# Vulnerabilities #}
+        <div class="tw-settings-card">
+            <div class="px-6 py-4 border-b border-border">
+                <h5 class="text-lg font-semibold text-text m-0">Vulnerabilities</h5>
+            </div>
+            <div class="p-6 space-y-6">
+                {% if not diff.vulnerabilities.introduced and not diff.vulnerabilities.resolved %}
+                    <p class="text-text-muted m-0">No vulnerability changes between these releases.</p>
+                {% endif %}
+                {% if diff.vulnerabilities.introduced %}
+                    <div>
+                        <h6 class="text-sm font-semibold uppercase tracking-wider text-danger mb-2">Introduced</h6>
+                        <ul class="m-0 pl-0 list-none space-y-1">
+                            {% for finding in diff.vulnerabilities.introduced %}
+                                <li class="text-sm text-text flex items-center gap-2">
+                                    <span class="tw-badge-danger">{{ finding.severity|default:"unknown" }}</span>
+                                    {{ finding.id }}
+                                    <span class="text-text-muted">{{ finding.package }} {{ finding.version }}</span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+                {% if diff.vulnerabilities.resolved %}
+                    <div>
+                        <h6 class="text-sm font-semibold uppercase tracking-wider text-success mb-2">Resolved</h6>
+                        <ul class="m-0 pl-0 list-none space-y-1">
+                            {% for finding in diff.vulnerabilities.resolved %}
+                                <li class="text-sm text-text flex items-center gap-2">
+                                    <span class="tw-badge-success">{{ finding.severity|default:"unknown" }}</span>
+                                    {{ finding.id }}
+                                    <span class="text-text-muted">{{ finding.package }} {{ finding.version }}</span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+{% endblock %}
