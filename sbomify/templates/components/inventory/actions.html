@@ -4,7 +4,7 @@
 <c-dropdowns.item compact href="{{ row.url }}" icon="fas fa-arrow-up-right-from-square">View {{ kind|slice:':-1' }}</c-dropdowns.item>
 {% if kind == 'products' %}
     <c-dropdowns.item compact href="{% url 'core:product_releases' row.id %}" icon="fas fa-tag">View releases</c-dropdowns.item>
-    {% if can_manage %}
+    {% if can_administer %}
         <c-dropdowns.item compact icon="fas fa-shield-halved" href="{% url 'core:security_advisory_new' %}?product={{ row.id }}">Add security advisory</c-dropdowns.item>
     {% endif %}
     <c-dropdowns.divider />
