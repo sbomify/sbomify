@@ -502,10 +502,10 @@ class TestEndpointChecks:
 
     @pytest.mark.parametrize(
         "scopes",
-        [None, ["*"], ["workspace:*"], ["workspace:administer"]],
-        ids=["unscoped", "wildcard", "workspace_bundle", "administer"],
+        [None, ["*"], ["controls:*"], ["controls:manage"]],
+        ids=["unscoped", "wildcard", "controls_bundle", "controls_manage"],
     )
-    def test_a_token_that_grants_administer_can_write(self, sample_team_with_owner_member, scopes):
+    def test_a_token_that_may_manage_controls_can_write(self, sample_team_with_owner_member, scopes):
         token = _scoped_token(sample_team_with_owner_member, scopes)
 
         response = _call(
