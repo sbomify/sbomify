@@ -30,10 +30,10 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "sbomify.settings")
 django_application = get_asgi_application()
 
 # Import channels after Django is initialized
-from channels.auth import AuthMiddlewareStack  # noqa: E402
 from channels.routing import ProtocolTypeRouter, URLRouter  # noqa: E402
 
 from sbomify.apps.core.routing import websocket_urlpatterns  # noqa: E402
+from sbomify.apps.core.ws_auth import ResilientAuthMiddlewareStack  # noqa: E402
 from sbomify.apps.mcp import oauth  # noqa: E402
 from sbomify.apps.mcp.auth import (  # noqa: E402
     MCPRateLimitedError,
@@ -341,7 +341,7 @@ application = LifespanApp(
     ProtocolTypeRouter(
         {
             "http": MCPRouter(django_application, mcp_application),
-            "websocket": AuthMiddlewareStack(URLRouter(websocket_urlpatterns)),
+            "websocket": ResilientAuthMiddlewareStack(URLRouter(websocket_urlpatterns)),
         }
     )
 )
