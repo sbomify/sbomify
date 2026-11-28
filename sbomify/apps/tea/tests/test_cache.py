@@ -8,7 +8,14 @@ from django.core.cache import cache
 from django.test import Client, override_settings
 
 from sbomify.apps.core.models import ReleaseArtifact
-from sbomify.apps.tea.cache import get_tea_cache, hash_key_part, invalidate_tea_cache, set_tea_cache, tea_cache_key
+from sbomify.apps.tea.cache import (
+    LIBTEA_VERSION,
+    get_tea_cache,
+    hash_key_part,
+    invalidate_tea_cache,
+    set_tea_cache,
+    tea_cache_key,
+)
 from sbomify.apps.tea.mappers import TEA_API_VERSION
 from sbomify.apps.tea.signals import _INVALIDATION_SENDERS
 
@@ -30,11 +37,11 @@ class TestCacheHelpers:
 
     def test_tea_cache_key_format(self):
         key = tea_cache_key("ws123", "product", "abc")
-        assert key == "tea:ws123:product:abc"
+        assert key == f"tea:ws123:{LIBTEA_VERSION}:product:abc"
 
     def test_tea_cache_key_single_part(self):
         key = tea_cache_key("ws123", "discovery")
-        assert key == "tea:ws123:discovery"
+        assert key == f"tea:ws123:{LIBTEA_VERSION}:discovery"
 
     @override_settings(TEA_CACHE_TTL=300)
     def test_get_set_cache(self):

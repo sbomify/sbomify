@@ -1,5 +1,7 @@
 """TEA schemas — re-exported from libtea with server-side aliases."""
 
+from datetime import datetime
+
 from libtea.models import (
     CLE as TEACLE,
 )
@@ -13,7 +15,8 @@ from libtea.models import (
     Checksum as TEAChecksum,
 )
 from libtea.models import (
-    Collection as TEACollection,
+    Collection,
+    ComponentReleaseWithCollection,
 )
 from libtea.models import (
     CollectionUpdateReason as TEACollectionUpdateReason,
@@ -23,9 +26,6 @@ from libtea.models import (
 )
 from libtea.models import (
     ComponentRef as TEAComponentRef,
-)
-from libtea.models import (
-    ComponentReleaseWithCollection as TEAComponentReleaseWithCollection,
 )
 from libtea.models import (
     DiscoveryInfo as TEADiscoveryInfo,
@@ -88,7 +88,28 @@ __all__ = [
     "TEAServerInfo",
     "TEAWellKnownEndpoint",
     "TEAWellKnownResponse",
+    "TEA_LEGACY_CONTEXT",
 ]
+
+# sbomify serves TEA 0.4.0. libtea checks a model it builds against the 1.0.0 rules
+# (an artifact needs a version, a format with a url needs a checksum) unless the
+# model is validated in this context.
+TEA_LEGACY_CONTEXT = {"tea_legacy": True}
+
+
+class TEACollection(Collection):
+    """A collection whose creation timestamp keeps its TEA 0.4.0 name, ``date``.
+
+    libtea names the field ``createdDate``, as TEA 1.0.0 does.
+    """
+
+    created_date: datetime | None = Field(default=None, alias="date")
+
+
+class TEAComponentReleaseWithCollection(ComponentReleaseWithCollection):
+    """Nests :class:`TEACollection`, so the latest collection serializes ``date`` as well."""
+
+    latest_collection: TEACollection
 
 
 class TEABadRequestResponse(BaseModel):

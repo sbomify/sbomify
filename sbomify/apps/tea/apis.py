@@ -40,9 +40,9 @@ from sbomify.apps.tea.mappers import (
     tea_tei_mapper,
 )
 from sbomify.apps.tea.schemas import (
+    TEA_LEGACY_CONTEXT,
     TEACLE,
     TEAArtifact,
-    TEAArtifactFormat,
     TEABadRequestResponse,
     TEAChecksum,
     TEACollection,
@@ -72,7 +72,9 @@ if TYPE_CHECKING:
 log = getLogger(__name__)
 
 # auth=None: TEA endpoints are public per spec (workspace-scoped, no authentication)
-router = Router(tags=["TEA"], auth=None, by_alias=True)
+# exclude_unset keeps fields sbomify never sets off the wire: libtea also models TEA 1.0.0,
+# and 0.4.0 has no artifact version, no error message and no token on a last page.
+router = Router(tags=["TEA"], auth=None, by_alias=True, exclude_unset=True)
 
 # TEA collection belongsTo constants
 BELONGS_TO_PRODUCT_RELEASE = CollectionBelongsTo.PRODUCT_RELEASE
@@ -85,6 +87,7 @@ BELONGS_TO_COMPONENT_RELEASE = CollectionBelongsTo.COMPONENT_RELEASE
 
 
 _T = TypeVar("_T", bound=models.Model)
+_Page = TypeVar("_Page", TEAPaginatedProductResponse, TEAPaginatedProductReleaseResponse)
 
 
 def _get_or_404(model_class: type[_T], **filters: object) -> _T | tuple[int, TEAErrorResponse]:
@@ -114,6 +117,20 @@ def _build_checksums(sha256_hash: str | None) -> list[TEAChecksum]:
     return []
 
 
+def _page(page_model: type[_Page], offset: int, size: int, total: int, results: list[Any]) -> _Page:
+    """Build a TEA 0.4.0 page. libtea derives ``hasNext`` and ``nextPageToken`` from the offsets."""
+    return page_model.model_validate(
+        {
+            "timestamp": timezone.now(),
+            "pageStartIndex": offset,
+            "pageSize": size,
+            "totalResults": total,
+            "results": results,
+        },
+        context=TEA_LEGACY_CONTEXT,
+    )
+
+
 _FORMAT_DISPLAY_NAMES = {"cyclonedx": "CycloneDX", "spdx": "SPDX"}
 
 
@@ -139,39 +156,45 @@ def _build_sbom_artifact(sbom: SBOM, base_url: str = "") -> TEAArtifact:
     """
     artifact_type = TEAArtifactType.VULNERABILITIES if sbom.bom_type == SBOM.BomType.VEX else TEAArtifactType.BOM
     kind = SBOM.BomType(sbom.bom_type).label if sbom.bom_type in SBOM.BomType.values else "SBOM"
-    return TEAArtifact(
-        uuid=str(sbom.uuid),
-        name=sbom.name,
-        type=artifact_type,
-        distribution_ids=None,
-        formats=(
-            TEAArtifactFormat(
-                media_type=get_artifact_mime_type(sbom.format),
-                description=f"{_format_display_name(sbom.format)} {kind} ({sbom.format_version})",
-                url=get_download_url_for_sbom(sbom, base_url=base_url or settings.APP_BASE_URL),
-                signature_url=sbom.signature_url,
-                checksums=tuple(_build_checksums(sbom.sha256_hash)),
+    return TEAArtifact.model_validate(
+        {
+            "uuid": str(sbom.uuid),
+            "name": sbom.name,
+            "type": artifact_type,
+            "distribution_ids": None,
+            "formats": (
+                {
+                    "media_type": get_artifact_mime_type(sbom.format),
+                    "description": f"{_format_display_name(sbom.format)} {kind} ({sbom.format_version})",
+                    "url": get_download_url_for_sbom(sbom, base_url=base_url or settings.APP_BASE_URL),
+                    "signature_url": sbom.signature_url,
+                    "checksums": tuple(_build_checksums(sbom.sha256_hash)),
+                },
             ),
-        ),
+        },
+        context=TEA_LEGACY_CONTEXT,
     )
 
 
 def _build_document_artifact(doc: Document, base_url: str = "") -> TEAArtifact:
     """Build TEA Artifact from a Document."""
-    return TEAArtifact(
-        uuid=str(doc.uuid),
-        name=doc.name,
-        type=get_tea_artifact_type(doc.document_type),  # type: ignore[arg-type]
-        distribution_ids=None,
-        formats=(
-            TEAArtifactFormat(
-                media_type=doc.content_type or "application/octet-stream",
-                description=f"Document: {doc.document_type or 'unknown'}",
-                url=get_download_url_for_document(doc, base_url=base_url or settings.APP_BASE_URL),
-                signature_url=doc.signature_url,
-                checksums=tuple(_build_checksums(doc.sha256_hash or doc.content_hash)),
+    return TEAArtifact.model_validate(
+        {
+            "uuid": str(doc.uuid),
+            "name": doc.name,
+            "type": get_tea_artifact_type(doc.document_type),
+            "distribution_ids": None,
+            "formats": (
+                {
+                    "media_type": doc.content_type or "application/octet-stream",
+                    "description": f"Document: {doc.document_type or 'unknown'}",
+                    "url": get_download_url_for_document(doc, base_url=base_url or settings.APP_BASE_URL),
+                    "signature_url": doc.signature_url,
+                    "checksums": tuple(_build_checksums(doc.sha256_hash or doc.content_hash)),
+                },
             ),
-        ),
+        },
+        context=TEA_LEGACY_CONTEXT,
     )
 
 
@@ -546,16 +569,7 @@ def list_products(
     # Build response
     results = [_build_product_response(p) for p in products]
 
-    return (
-        200,
-        TEAPaginatedProductResponse(
-            timestamp=timezone.now(),
-            page_start_index=pageOffset,
-            page_size=pageSize,
-            total_results=total,
-            results=tuple(results),
-        ),
-    )
+    return 200, _page(TEAPaginatedProductResponse, pageOffset, pageSize, total, results)
 
 
 @router.get(
@@ -616,16 +630,7 @@ def get_product_releases(
 
     results = [_build_product_release_response(r) for r in releases]
 
-    return (
-        200,
-        TEAPaginatedProductReleaseResponse(
-            timestamp=timezone.now(),
-            page_start_index=pageOffset,
-            page_size=pageSize,
-            total_results=total,
-            results=tuple(results),
-        ),
-    )
+    return 200, _page(TEAPaginatedProductReleaseResponse, pageOffset, pageSize, total, results)
 
 
 # =============================================================================
@@ -684,16 +689,7 @@ def query_product_releases(
 
     results = [_build_product_release_response(r) for r in paginated]
 
-    return (
-        200,
-        TEAPaginatedProductReleaseResponse(
-            timestamp=timezone.now(),
-            page_start_index=pageOffset,
-            page_size=pageSize,
-            total_results=total,
-            results=tuple(results),
-        ),
-    )
+    return 200, _page(TEAPaginatedProductReleaseResponse, pageOffset, pageSize, total, results)
 
 
 @router.get(
@@ -915,8 +911,8 @@ def get_component_releases(
 ) -> Any:
     """Get releases for a component.
 
-    TODO: Add pageOffset/pageSize pagination for consistency with get_product_releases,
-    pending a PaginatedComponentReleaseResponse schema in libtea.
+    TODO: TEA 0.4.0 defines this response as a plain array. Page it with libtea's
+    PaginatedComponentReleaseResponse when the API moves to TEA 1.0.0, which pages it.
     """
     team = getattr(request, TEA_TEAM_ATTR)
 

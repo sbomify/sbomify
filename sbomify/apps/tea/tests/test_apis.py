@@ -287,6 +287,20 @@ class TestTEAProductReleasesEndpoint:
             assert "version" in release
             assert "createdDate" in release
 
+    def test_product_releases_page_carries_the_next_offset_as_its_token(self, tea_enabled_product):
+        """A 0.4.0 page's token is the next offset as a string, the form libtea reads back from 0.4.0 servers."""
+        Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+        Release.objects.create(product=tea_enabled_product, name="v2.0.0")
+        ws = tea_enabled_product.team.key
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.uuid}/releases?workspace_key={ws}&pageSize=1"
+
+        first = Client().get(url).json()
+        last = Client().get(f"{url}&pageOffset=1").json()
+
+        assert (first["hasNext"], first["nextPageToken"], first["totalResults"]) == (True, "1", 2)
+        assert last["hasNext"] is False
+        assert "nextPageToken" not in last
+
 
 @pytest.mark.django_db
 class TestTEAProductReleaseEndpoint:
@@ -516,6 +530,7 @@ class TestTEAComponentReleaseCollectionEndpoints:
         assert data["belongsTo"] == "COMPONENT_RELEASE"
         assert "artifacts" in data
         assert "date" in data
+        assert "createdDate" not in data
         assert "updateReason" in data
         assert data["updateReason"]["type"] == "INITIAL_RELEASE"
 
@@ -620,6 +635,8 @@ class TestTEAArtifactEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert "distributionIds" in data
+        # libtea also models TEA 1.0.0, whose artifact fields 0.4.0 does not define.
+        assert not {"version", "createdDate", "distributionTypes"} & data.keys()
 
     def test_get_artifact_not_found(self, tea_enabled_component):
         """Test getting a non-existent artifact."""
