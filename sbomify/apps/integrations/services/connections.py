@@ -49,8 +49,15 @@ def save_connection(
     call has just replaced, so the reconnect ends it: the claim comes off, and
     the run the callback queues can take the connection straight away instead
     of waiting out a lease it would otherwise have just renewed.
+
+    A reconnect to a different account at the provider also drops the
+    notification routes. A Slack channel id names a channel in one Slack
+    workspace only, so every route kept from the old one would fail to post.
     """
-    integration, _created = Integration.objects.update_or_create(
+    previous_account = (
+        Integration.objects.filter(team=team, provider=provider.key).values_list("account", flat=True).first()
+    )
+    integration, created = Integration.objects.update_or_create(
         team=team,
         provider=provider.key,
         defaults={
@@ -68,6 +75,9 @@ def save_connection(
             "connected_at": timezone.now(),
         },
     )
+
+    if not created and (previous_account or {}).get("id") != (token_set.account or {}).get("id"):
+        integration.routes.all().delete()
 
     if integration.last_sync_status == Integration.SyncStatus.RUNNING:
         integration.last_sync_status = Integration.SyncStatus.FAILED
