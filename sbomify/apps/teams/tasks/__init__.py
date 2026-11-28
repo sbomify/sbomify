@@ -12,6 +12,7 @@ from django.db.models import DateTimeField, F
 from django.db.models.functions import Coalesce, Greatest, Now
 from django.utils import timezone
 
+from sbomify.apps.core.net import is_public_address
 from sbomify.apps.teams.broadcasts import broadcast_custom_domain_updated
 from sbomify.apps.teams.models import Workspace
 from sbomify.apps.teams.utils import custom_domain_challenge, invalidate_custom_domain_cache
@@ -28,9 +29,6 @@ MAX_RETRIES = 10
 # Our domain-check answer is a few hundred bytes, and whoever runs the domain
 # chooses what answers the probe. A longer answer is not ours.
 PROBE_MAX_BYTES = 4096
-# Public IPv6 unicast is all allocated from this block. Outside it, is_global
-# still passes NAT64 and site-local addresses, which lead into private networks.
-IPV6_GLOBAL_UNICAST = ipaddress.IPv6Network("2000::/3")
 
 
 def _public_address(domain: str) -> str | None:
@@ -41,8 +39,7 @@ def _public_address(domain: str) -> str | None:
         return None
     for *_, sockaddr in resolved:
         address = ipaddress.ip_address(sockaddr[0])
-        # is_global also passes multicast.
-        if address.is_global and not address.is_multicast and (address.version == 4 or address in IPV6_GLOBAL_UNICAST):
+        if is_public_address(address):
             return str(address)
     return None
 

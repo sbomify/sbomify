@@ -1880,16 +1880,18 @@ wheels = [
 
 [[package]]
 name = "libtea"
-version = "0.5.1"
+version = "26.11.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "idna" },
     { name = "pydantic" },
     { name = "requests" },
     { name = "semver" },
+    { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b1/e0/2efb4b2e21f3a697ae468f548a53f0b38a31f61a382c7fca4a3cb9eb01b4/libtea-0.5.1.tar.gz", hash = "sha256:e02b17d3d2d8c22219b28cdd17d19573c0fddaab6fd65f86ddfb50a94015aa3e", size = 67553, upload-time = "2026-03-17T07:59:54.262Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3d/40/bd9ba21a3d51b142eb28da9af2250db6261e3d46136d3ea6035c0c94beea/libtea-26.11.3.tar.gz", hash = "sha256:b2b29ae79787c00df2d748d0e6bc37dc74940dc35d3cbb425a42f462c187fa69", size = 138066, upload-time = "2026-11-23T14:36:53.255Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c7/5a/d7b48844b676674aecca9b7a3ac7ba81b0ae619ec24d10718bbc8aee608a/libtea-0.5.1-py3-none-any.whl", hash = "sha256:a6a7eb3eadfc55ac83823a4890e712c6ea00a50549f4bc417f89d47d69c3f486", size = 74280, upload-time = "2026-03-17T07:59:52.918Z" },
+    { url = "https://files.pythonhosted.org/packages/cf/62/3e40277620900862c8a38acc965b399c67bcb653cd690c0dfb7ad8b00d69/libtea-26.11.3-py3-none-any.whl", hash = "sha256:501a28745973ab59f62e1f9dcd90256848eb89df5b8bc01a291ffe6931196145", size = 135274, upload-time = "2026-11-23T14:36:52.113Z" },
 ]
 
 [[package]]
@@ -3540,7 +3542,7 @@ requires-dist = [
     { name = "google-cloud-storage", specifier = ">=3.0.0,<4" },
     { name = "gunicorn", specifier = ">=25.0.3,<27" },
     { name = "jsonschema", specifier = ">=4.26,<5" },
-    { name = "libtea", specifier = "==0.5.1" },
+    { name = "libtea", specifier = "==26.11.3" },
     { name = "license-expression", specifier = ">=30.4.4,<31" },
     { name = "mcp", specifier = ">=1.28.1,<2" },
     { name = "posthog", specifier = ">=3.20.0,<8" },

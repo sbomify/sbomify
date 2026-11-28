@@ -18,6 +18,7 @@ from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.core.services.security_snapshot import build_component_security_picture
 from sbomify.apps.sboms.freshness import freshness_state
 from sbomify.apps.sboms.models import ProductComponent
+from sbomify.apps.tea.pins import upstream_changed
 from sbomify.apps.teams.models import Workspace
 from sbomify.apps.vulnerability_scanning.posture import build_release_vuln_postures
 
@@ -205,9 +206,11 @@ def build_inventory_snapshot(
                 artifact_count=Count(
                     "artifacts",
                     filter=Q(artifacts__sbom__component__team=workspace)
-                    | Q(artifacts__document__component__team=workspace),
+                    | Q(artifacts__document__component__team=workspace)
+                    | Q(artifacts__remote_artifact__release__subscription__component__team=workspace),
                     distinct=True,
-                )
+                ),
+                upstream_changed=upstream_changed(),
             )
             .order_by("name", "id")
         )
@@ -247,6 +250,7 @@ def build_inventory_snapshot(
                     if release.is_prerelease
                     else "Release",
                     "lifecycle_state": lifecycle_state,
+                    "upstream_changed": release.upstream_changed,
                     # A release sbomify no longer monitors is not scanned again:
                     # its counts are as old as its last scan, and the row says so.
                     "untracked": lifecycle_state != "active" and release.id not in still_shipped,
@@ -274,7 +278,8 @@ def build_inventory_snapshot(
         )
         counts = _counts(picture["counts"].get(component.id))
         assessed = component.id not in picture["unassessed"]
-        is_document = component.component_type == Component.ComponentType.DOCUMENT
+        # Documents and TEA subscriptions hold no SBOMs here, so scans and freshness do not apply.
+        is_document = component.component_type != Component.ComponentType.BOM
         stale = bool(freshness and freshness["is_stale"])
         freshness_label = (
             "Not applicable"
@@ -322,7 +327,7 @@ def build_inventory_snapshot(
     else:
         for product in products:
             assigned = [component_rows[c.id] for c in product.components.all()]
-            security_rows = [row for row in assigned if row["component_type"] != Component.ComponentType.DOCUMENT]
+            security_rows = [row for row in assigned if row["component_type"] == Component.ComponentType.BOM]
             counts = _counts(
                 {key: sum(row["counts"][key] for row in security_rows) for key in (*SEVERITIES, "suppressed")}
             )

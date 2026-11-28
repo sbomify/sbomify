@@ -256,6 +256,7 @@ MOUNTS: tuple[tuple[str, str], ...] = (
     ("/compliance", "sbomify.apps.compliance.apis.router"),
     ("/controls", "sbomify.apps.controls.apis.router"),
     ("/advisories", "sbomify.apps.security_advisories.apis.router"),
+    ("/tea-subscriptions", "sbomify.apps.tea.subscriptions_api.router"),
     ("/audit", "sbomify.apps.audit.apis.router"),
     ("/internal", "sbomify.apps.teams.apis.internal_router"),
     ("/auth/oidc", "sbomify.apps.oidc.apis.router"),

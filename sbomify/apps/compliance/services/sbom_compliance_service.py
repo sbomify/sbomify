@@ -382,8 +382,10 @@ def get_bsi_assessment_status(product: Product) -> ServiceResult[dict[str, objec
     # Annotate each component with its latest SBOM id to avoid loading all history
     latest_sbom_subquery = SBOM.objects.filter(component=OuterRef("pk")).order_by("-created_at").values("pk")[:1]
 
+    # A TEA subscription's SBOMs live on the server it follows, so it is not one of the product's to assess.
     components = list(
         Component.objects.filter(products=product)
+        .exclude(component_type=Component.ComponentType.TEA_SUBSCRIPTION)
         .order_by("name")
         .distinct()
         .annotate(latest_sbom_id=Subquery(latest_sbom_subquery))

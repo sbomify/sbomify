@@ -97,6 +97,7 @@ class ComponentType(str, Enum):
 
     DOCUMENT = "document"
     BOM = "bom"
+    TEA_SUBSCRIPTION = "tea_subscription"
 
 
 # Product identifier types matching the model

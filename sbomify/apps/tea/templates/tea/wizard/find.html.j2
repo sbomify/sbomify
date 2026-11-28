@@ -1,0 +1,47 @@
+{% url 'core:tea_subscription_new' as wizard_url %}
+{% include "tea/wizard/_stepper.html.j2" %}
+<c-layout.form-section step="2" title="Find" description="Connected to {{ server.base_url }}. Find the product that ships the component.">
+<div class="flex flex-col gap-6">
+    <form class="flex flex-col gap-3"
+          hx-post="{{ wizard_url }}"
+          hx-target="#tea-wizard"
+          hx-disabled-elt="find button">
+        {% csrf_token %}
+        <input type="hidden" name="step" value="tei">
+        <c-forms.field label="Paste a TEI" for="tei" hint="Found through the TEI's own domain, so it may lead to another server.">
+        <c-forms.input id="tei" name="tei" maxlength="2048" required placeholder="tei://example.com/purl/..." />
+        </c-forms.field>
+        <div class="flex justify-end">
+            <c-buttons.secondary type="submit"><span>Look up TEI</span></c-buttons.secondary>
+        </div>
+    </form>
+    <form class="flex flex-col gap-3"
+          hx-post="{{ wizard_url }}"
+          hx-target="#tea-wizard"
+          hx-disabled-elt="find button">
+        {% csrf_token %}
+        <input type="hidden" name="step" value="products">
+        <input type="hidden" name="server" value="{{ server.base_url }}">
+        <div class="grid gap-3 sm:grid-cols-[10rem_1fr]">
+            <c-forms.field label="Identifier type" for="id_type">
+            <c-forms.select id="id_type" name="id_type" :options="id_types" selected="PURL" />
+            </c-forms.field>
+            <c-forms.field label="Search by identifier" for="id_value">
+            <c-forms.input id="id_value" name="id_value" maxlength="2048" required placeholder="pkg:pypi/requests" />
+            </c-forms.field>
+        </div>
+        <div class="flex justify-end">
+            <c-buttons.secondary type="submit"><span>Search</span></c-buttons.secondary>
+        </div>
+    </form>
+    <form hx-post="{{ wizard_url }}"
+          hx-target="#tea-wizard"
+          hx-disabled-elt="find button"
+          class="flex justify-end">
+        {% csrf_token %}
+        <input type="hidden" name="step" value="products">
+        <input type="hidden" name="server" value="{{ server.base_url }}">
+        <c-buttons.ghost type="submit"><span>Browse all products</span><i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.ghost>
+    </form>
+</div>
+</c-layout.form-section>

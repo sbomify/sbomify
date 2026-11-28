@@ -529,6 +529,15 @@ class Release(models.Model):
         from sbomify.apps.core.services.vex_pins import sync_vex_pins
         from sbomify.apps.sboms.models import SBOM
 
+        if component.component_type == Component.ComponentType.TEA_SUBSCRIPTION:
+            from sbomify.apps.tea.pins import head_artifacts, subscription_of
+
+            subscription = subscription_of(component)
+            if subscription is not None:
+                for remote_artifact in head_artifacts(subscription):
+                    ReleaseArtifact.objects.create(release=self, remote_artifact=remote_artifact, auto_pinned=True)
+            return
+
         # Add latest SBOMs by format. VEX is not taken by recency: the newest VEX
         # may be for another version than the newest SBOM, so it is pinned below
         # only when written for a version this release ships.
@@ -792,7 +801,7 @@ class ComponentReleaseArtifact(models.Model):
 
 
 class ReleaseArtifact(models.Model):
-    """Junction table linking releases to specific artifacts (SBOMs or Documents)."""
+    """Junction table linking releases to specific artifacts (SBOMs, Documents, or remote TEA artifacts)."""
 
     class Meta:
         db_table = "core_release_artifacts"
@@ -800,6 +809,7 @@ class ReleaseArtifact(models.Model):
         unique_together = [
             ("release", "sbom"),  # An SBOM can only be in a release once
             ("release", "document"),  # A document can only be in a release once
+            ("release", "remote_artifact"),  # A remote artifact revision can only be in a release once
         ]
         indexes = [
             models.Index(fields=["release", "-created_at"], name="core_art_rel_created_idx"),
@@ -812,7 +822,7 @@ class ReleaseArtifact(models.Model):
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     release = models.ForeignKey(Release, on_delete=models.CASCADE, related_name="artifacts")
 
-    # Either sbom OR document will be set, never both
+    # Exactly one of sbom, document and remote_artifact is set
     sbom = models.ForeignKey(
         "sboms.SBOM",
         on_delete=models.CASCADE,
@@ -826,6 +836,14 @@ class ReleaseArtifact(models.Model):
         null=True,
         blank=True,
         help_text="Document artifact included in this release",
+    )
+    remote_artifact = models.ForeignKey(
+        "tea.TeaRemoteArtifact",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="pins",
+        help_text="Revision of an artifact published on another TEA server, as it was when pinned",
     )
 
     auto_pinned = models.BooleanField(
@@ -845,15 +863,17 @@ class ReleaseArtifact(models.Model):
             return f"{self.release.name} - SBOM: {self.sbom.name}"
         elif self.document:
             return f"{self.release.name} - Document: {self.document.name}"
+        elif self.remote_artifact:
+            return f"{self.release.name} - Remote artifact: {self.remote_artifact}"
         return f"{self.release.name} - Invalid artifact"
 
     def clean(self) -> None:
-        """Validate that exactly one of sbom or document is set."""
-        if not self.sbom and not self.document:
-            raise ValidationError("Either sbom or document must be specified.")
-
-        if self.sbom and self.document:
-            raise ValidationError("Cannot specify both sbom and document for the same artifact.")
+        """Validate that exactly one of sbom, document and remote_artifact is set."""
+        given = sum(value is not None for value in (self.sbom_id, self.document_id, self.remote_artifact_id))
+        if given == 0:
+            raise ValidationError("One of sbom, document and remote_artifact must be specified.")
+        if given > 1:
+            raise ValidationError("Specify only one of sbom, document and remote_artifact for an artifact.")
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         self.clean()
@@ -861,11 +881,13 @@ class ReleaseArtifact(models.Model):
 
     @property
     def artifact_type(self) -> str:
-        """Return the type of artifact ('sbom' or 'document')."""
+        """Return the type of artifact ('sbom', 'document' or 'remote')."""
         if self.sbom:
             return "sbom"
         elif self.document:
             return "document"
+        elif self.remote_artifact:
+            return "remote"
         return "unknown"
 
     @property
@@ -875,6 +897,8 @@ class ReleaseArtifact(models.Model):
             return self.sbom.name
         elif self.document:
             return self.document.name
+        elif self.remote_artifact:
+            return self.remote_artifact.name or self.remote_artifact.uuid
         return "Unknown"
 
     @property
@@ -884,6 +908,8 @@ class ReleaseArtifact(models.Model):
             return self.sbom.component
         elif self.document:
             return self.document.component
+        elif self.remote_artifact:
+            return self.remote_artifact.release.subscription.component
         return None
 
 

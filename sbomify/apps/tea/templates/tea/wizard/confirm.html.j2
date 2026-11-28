@@ -1,0 +1,58 @@
+{% include "tea/wizard/_stepper.html.j2" %}
+<form class="flex flex-col gap-6"
+      hx-post="{% url 'core:tea_subscription_new' %}"
+      hx-target="#tea-wizard"
+      hx-disabled-elt="find button">
+    {% csrf_token %}
+    <input type="hidden" name="step" value="subscribe">
+    <input type="hidden" name="server" value="{{ server.base_url }}">
+    <input type="hidden" name="tei" value="{{ tei }}">
+    {% for pick in picked %}
+        <input type="hidden"
+               name="pick"
+               value="{{ pick.uuid }}|{{ pick.release_uuid }}|{{ pick.name }}">
+    {% endfor %}
+    <c-layout.form-section step="4" title="Confirm" description="Name each subscription and pick the release it starts from. sbomify checks it as soon as you subscribe.">
+    <div class="flex flex-col gap-5">
+        {% for pick in picked %}
+            <div class="grid gap-3 sm:grid-cols-2">
+                <c-forms.field label="Name for {{ pick.name }}" for="name_{{ forloop.counter0 }}" required>
+                <c-forms.input id="name_{{ forloop.counter0 }}" name="name_{{ forloop.counter0 }}" required maxlength="255" value="{{ pick.name }}" />
+                </c-forms.field>
+                {% if pick.releases %}
+                    <c-forms.field label="Start from" for="release_{{ forloop.counter0 }}" hint="Always watched, whatever release is newest.">
+                    <c-forms.select id="release_{{ forloop.counter0 }}" name="release_{{ forloop.counter0 }}" :options="pick.releases" selected="{{ pick.release_uuid }}" />
+                    </c-forms.field>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+    </c-layout.form-section>
+    <c-layout.form-section accent="neutral" title="Where it goes" description="Optional. Attach it to products, and pin what it publishes now into existing releases.">
+    <div class="flex flex-col gap-5">
+        <c-forms.field label="Products">
+        <div class="flex flex-col gap-2">
+            {% for product in products %}
+                <c-forms.checkbox name="product_ids" value="{{ product.id }}">{{ product.name }}</c-forms.checkbox>
+            {% empty %}
+                <c-forms.hint>This workspace has no products yet.</c-forms.hint>
+            {% endfor %}
+        </div>
+        </c-forms.field>
+        {% if releases %}
+            <c-forms.field label="Pin into releases" hint="A pinned release keeps the artifacts as they are now. It never changes by itself.">
+            <div class="flex flex-col gap-2">
+                {% for release in releases %}
+                    <c-forms.checkbox name="pin_release_ids" value="{{ release.id }}">{{ release.product.name }} {{ release.name }}</c-forms.checkbox>
+                {% endfor %}
+            </div>
+            </c-forms.field>
+        {% endif %}
+    </div>
+    </c-layout.form-section>
+    <div class="flex flex-wrap items-center justify-end gap-2">
+        <c-buttons.primary type="submit">
+        <i class="fas fa-plus" aria-hidden="true"></i><span>Subscribe</span>
+        </c-buttons.primary>
+    </div>
+</form>

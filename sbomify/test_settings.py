@@ -244,6 +244,8 @@ API_TOKEN_HEAVY_RATE_LIMIT = "1000000/min"
 # under tests; switching off the cache keeps API responses fresh and
 # avoids stale-read failures in mutation-then-read scenarios.
 TEA_CACHE_TTL = 0
+# Tests that talk to a live_server opt in with override_settings.
+TEA_SUBSCRIPTION_ALLOW_PRIVATE_HOSTS = False
 
 TESTING = True
 PLAYWRIGHT_DJANGO_HOST = os.environ.get("PLAYWRIGHT_DJANGO_HOST", "host.docker.internal")

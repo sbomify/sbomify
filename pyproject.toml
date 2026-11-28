@@ -46,7 +46,7 @@ dependencies = [
     "django-dramatiq>=0.15.0",
     "channels>=4.0.0,<5",
     "channels-redis>=4.2.0,<5",
-    "libtea==0.5.1",
+    "libtea==26.11.3",
     "compliance-trestle>=4.1.0,<5",
     "posthog>=3.20.0,<8",
     "tzdata>=2025.2",
@@ -169,6 +169,7 @@ filterwarnings = [
 
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "live_tea: reads the sbomify TEA servers over the internet; skipped unless selected with '-m live_tea'",
 ]
 
 [tool.coverage.run]

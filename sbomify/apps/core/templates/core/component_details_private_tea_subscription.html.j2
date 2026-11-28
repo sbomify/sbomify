@@ -1,0 +1,130 @@
+{% extends "core/component_details_private_base.html.j2" %}
+{% load humanize %}
+{% comment %}
+    A TEA subscription's page: where the component lives upstream, how its checks
+    are going, the releases it watches with their artifacts, and what changed.
+    It holds no uploads, so the artifacts menu is empty. The whole section
+    refreshes when a check of this component finishes.
+{% endcomment %}
+{% block meatball_artifacts %}{% endblock %}
+{% block header_after_meta %}
+    <div id="tea-subscription"
+         class="flex flex-col gap-6"
+         x-data="liveRegion({ refresh: ['tea_subscription_checked'], key: 'component_id', id: '{{ component.id|escapejs }}' })"
+         hx-get="{{ request.get_full_path }}"
+         hx-select="#tea-subscription"
+         hx-trigger="live-refresh"
+         hx-swap="morph">
+        <c-cards.card title="Upstream" subtitle="sbomify keeps this component's metadata and checks it every hour. Nothing is downloaded.">
+        <div class="flex flex-col gap-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <c-badges.dynamic data-variant="{{ subscription.status_tone }}">{{ subscription.status_display }}</c-badges.dynamic>
+                {% if component.has_crud_permissions %}
+                    <form hx-post="{% url 'core:tea_subscription_check' component.id %}"
+                          hx-swap="none"
+                          hx-disabled-elt="find button[type='submit']">
+                        {% csrf_token %}
+                        <c-buttons.secondary size="sm" type="submit">
+                        <i class="fas fa-arrows-rotate" aria-hidden="true"></i><span>Check now</span>
+                        </c-buttons.secondary>
+                    </form>
+                {% endif %}
+            </div>
+            {% if subscription.last_error %}
+                <c-feedback.alert variant="danger" title="The last check failed">{{ subscription.last_error }}</c-feedback.alert>
+            {% endif %}
+            <dl class="flex flex-col gap-3 m-0">
+                <c-layout.description-row label="Server"><span class="break-all">{{ subscription.server }}</span></c-layout.description-row>
+                <c-layout.description-row label="Remote component">
+                {{ subscription.remote_name|default:subscription.remote_component_uuid }}
+                </c-layout.description-row>
+                {% for identifier in subscription.remote_identifiers %}
+                    <c-layout.description-row label="{{ identifier.id_type }}"><span class="break-all">{{ identifier.id_value }}</span></c-layout.description-row>
+                {% endfor %}
+                <c-layout.description-row label="Newest release">{{ subscription.latest_release.version|default:"None listed" }}</c-layout.description-row>
+                <c-layout.description-row label="Last checked">
+                {% if subscription.last_checked_at %}
+                    {{ subscription.last_checked_at|naturaltime }}
+                {% else %}
+                    Not yet
+                {% endif %}
+                </c-layout.description-row>
+            </dl>
+        </div>
+        </c-cards.card>
+        <c-cards.card title="Upstream releases" subtitle="Every release the server lists. sbomify reads the newest one, the one picked when subscribing, and any pinned into a product release." flush>
+        {% if subscription.releases %}
+            <c-tables.table>
+            <c-tables.head>
+            <c-tables.header-cell nowrap>Version</c-tables.header-cell>
+            <c-tables.header-cell>Lifecycle</c-tables.header-cell>
+            <c-tables.header-cell>Artifacts</c-tables.header-cell>
+            <c-tables.header-cell date>Released</c-tables.header-cell>
+            </c-tables.head>
+            <tbody>
+                {% for release in subscription.releases %}
+                    <c-tables.row>
+                    <c-tables.cell class="font-medium">
+                    {{ release.version }}
+                    {% if release.gone %}<c-badges.danger size="sm">Removed upstream</c-badges.danger>{% endif %}
+                    </c-tables.cell>
+                    <c-tables.cell>
+                    {% if release.read %}
+                        <c-badges.dynamic data-variant="{{ release.lifecycle_tone }}">{{ release.lifecycle_display }}</c-badges.dynamic>
+                    {% else %}
+                        <span class="text-text-muted">Not read</span>
+                    {% endif %}
+                    </c-tables.cell>
+                    <c-tables.cell>
+                    <div class="flex flex-col gap-1">
+                        {% for artifact in release.artifacts %}
+                            <span class="flex flex-wrap items-center gap-2">
+                                {% if artifact.formats.0.url %}
+                                    <a href="{{ artifact.formats.0.url }}"
+                                       target="_blank"
+                                       rel="noopener noreferrer"
+                                       class="break-all">{{ artifact.name }}</a>
+                                {% else %}
+                                    <span class="break-all">{{ artifact.name }}</span>
+                                {% endif %}
+                                <span class="text-text-muted">version {{ artifact.version }}</span>
+                                <c-badges.dynamic size="sm" data-variant="{{ artifact.state_tone }}">{{ artifact.state_display }}</c-badges.dynamic>
+                            </span>
+                        {% empty %}
+                            <span class="text-text-muted">Not read yet</span>
+                        {% endfor %}
+                    </div>
+                    </c-tables.cell>
+                    <c-tables.cell date>{{ release.release_date|date:"j M Y" }}</c-tables.cell>
+                    </c-tables.row>
+                {% endfor %}
+            </tbody>
+            </c-tables.table>
+        {% else %}
+            <c-feedback.empty-state icon="fas fa-tag" title="No releases yet" message="The first check lists the releases the server publishes." />
+        {% endif %}
+        </c-cards.card>
+        <c-cards.card title="History" subtitle="What each check found that differs from the check before it." flush>
+        {% if subscription_events %}
+            <c-tables.table>
+            <c-tables.head>
+            <c-tables.header-cell nowrap>What happened</c-tables.header-cell>
+            <c-tables.header-cell>Details</c-tables.header-cell>
+            <c-tables.header-cell date>When</c-tables.header-cell>
+            </c-tables.head>
+            <tbody>
+                {% for event in subscription_events %}
+                    <c-tables.row>
+                    <c-tables.cell nowrap class="font-medium">{{ event.title }}</c-tables.cell>
+                    <c-tables.cell muted>{{ event.summary }}</c-tables.cell>
+                    <c-tables.cell date>{{ event.created_at|date:"j M Y, H:i" }}</c-tables.cell>
+                    </c-tables.row>
+                {% endfor %}
+            </tbody>
+            </c-tables.table>
+        {% else %}
+            <c-feedback.empty-state icon="fas fa-clock-rotate-left" title="Nothing has changed yet" message="Changes upstream show here after each check." />
+        {% endif %}
+        </c-cards.card>
+    </div>
+{% endblock %}

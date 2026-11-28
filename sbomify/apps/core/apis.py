@@ -330,6 +330,15 @@ def _private_items_allowed(team: Workspace) -> bool:
     return team.can_be_private()
 
 
+TEA_SUBSCRIPTION_CREATE_REFUSED = "Subscribe to a component on a TEA server to create a TEA subscription."
+TEA_SUBSCRIPTION_TYPE_FIXED = "A TEA subscription keeps its type, and other components can't become one."
+
+
+def _type_change_refused(current: str, new: str) -> bool:
+    """A subscription carries remote state no other type has, so neither side of that change is allowed."""
+    return current != new and Component.ComponentType.TEA_SUBSCRIPTION in (current, new)
+
+
 def _gated_visibility_allowed(team: Workspace) -> bool:
     """Check if gated visibility is allowed for the team (Business or Enterprise plans)."""
     return team.can_be_private()  # Same restriction as private items
@@ -1826,6 +1835,9 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
                     "error_code": ErrorCode.FORBIDDEN,
                 }
 
+            if payload.component_type == Component.ComponentType.TEA_SUBSCRIPTION:  # type: ignore[comparison-overlap]
+                return 400, {"detail": TEA_SUBSCRIPTION_CREATE_REFUSED, "error_code": ErrorCode.INVALID_DATA}
+
             if payload.is_global and payload.component_type != Component.ComponentType.DOCUMENT:  # type: ignore[comparison-overlap]
                 return 400, {
                     "detail": "Only document components can be marked as workspace-wide",
@@ -2020,6 +2032,9 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
 
     try:
         with transaction.atomic():
+            if _type_change_refused(component.component_type, payload.component_type):
+                return 400, {"detail": TEA_SUBSCRIPTION_TYPE_FIXED, "error_code": ErrorCode.INVALID_DATA}
+
             # Evaluate final state after this update to enforce document-only constraint for globals
             if payload.is_global and payload.component_type != Component.ComponentType.DOCUMENT:  # type: ignore[comparison-overlap]
                 return 400, {
@@ -2146,6 +2161,9 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
             update_data = payload.model_dump(exclude_unset=True)
             new_component_type = update_data.get("component_type", component.component_type)
             new_is_global = update_data.get("is_global", component.is_global)
+
+            if _type_change_refused(component.component_type, new_component_type):
+                return 400, {"detail": TEA_SUBSCRIPTION_TYPE_FIXED, "error_code": ErrorCode.INVALID_DATA}
 
             if new_is_global and new_component_type != Component.ComponentType.DOCUMENT:
                 return 400, {

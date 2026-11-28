@@ -1,0 +1,17 @@
+{% extends "core/dashboard_base.htmx.j2" %}
+{% block title %}Subscribe to a TEA component · sbomify{% endblock %}
+{% comment %}
+    The TEA subscription import wizard. Each step posts back to the same view and
+    the answer replaces #tea-wizard, so the page header stays while the steps move.
+{% endcomment %}
+{% block dashboard_content %}
+    {% url 'core:component_new' as new_url %}
+    <c-layout.frame class="max-w-5xl">
+    <c-layout.page-header title="Subscribe to a TEA component" subtitle="Follow a component another TEA 1.0 server publishes. sbomify keeps its metadata and checks it every hour. Nothing is downloaded.">
+    <c-buttons.ghost href="{{ new_url }}" size="sm">
+    <i class="fas fa-arrow-left" aria-hidden="true"></i><span>Back to new component</span>
+    </c-buttons.ghost>
+    </c-layout.page-header>
+    <div id="tea-wizard" class="flex flex-col gap-6">{% include "tea/wizard/source.html.j2" %}</div>
+    </c-layout.frame>
+{% endblock %}

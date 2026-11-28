@@ -1,23 +1,28 @@
 """
 TEA (Transparency Exchange API) endpoints.
 
-Based on TEA OpenAPI Spec v0.4.0.
+Based on TEA OpenAPI Spec v1.0.0.
 All endpoints are public and workspace-scoped.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, TypeVar
+from collections.abc import Callable, Sequence
+from datetime import datetime
+from functools import wraps
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
+from urllib.parse import urlencode
 
 from django.conf import settings
+from django.core import signing
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import models
-from django.db.models import Case, Prefetch, QuerySet, When
-from django.http import HttpRequest
-from django.utils import timezone
+from django.db.models import Case, F, OrderBy, Prefetch, QuerySet, When
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from libtea.models import ArtifactType as TEAArtifactType
 from libtea.models import ChecksumAlgorithm, CollectionBelongsTo, CollectionUpdateReasonType, ErrorType
 from ninja import Query, Router
+from pydantic import ValidationError as PydanticValidationError
 
 from sbomify.apps.core.models import (
     Component,
@@ -27,6 +32,13 @@ from sbomify.apps.core.models import (
     Release,
     ReleaseArtifact,
 )
+from sbomify.apps.core.services.cle import (
+    get_cle_document,
+    get_component_cle_document,
+    get_component_release_cle_document,
+    get_release_cle_document,
+)
+from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.sboms.utils import get_download_url_for_document, get_download_url_for_sbom
@@ -37,25 +49,29 @@ from sbomify.apps.tea.mappers import (
     TEIParseError,
     build_tea_server_url,
     tea_identifier_mapper,
+    tea_purl_mapper,
     tea_tei_mapper,
 )
+from sbomify.apps.tea.models import TeaRemoteArtifact
 from sbomify.apps.tea.schemas import (
     TEACLE,
     TEAArtifact,
-    TEAArtifactFormat,
     TEABadRequestResponse,
     TEAChecksum,
     TEACollection,
-    TEACollectionUpdateReason,
     TEAComponent,
     TEAComponentRef,
     TEAComponentReleaseWithCollection,
     TEADiscoveryInfo,
     TEAErrorResponse,
+    TEAPaginatedCollectionResponse,
+    TEAPaginatedComponentReleaseResponse,
+    TEAPaginatedComponentResponse,
     TEAPaginatedProductReleaseResponse,
     TEAPaginatedProductResponse,
     TEAProduct,
     TEAProductRelease,
+    TEAProductReleaseWithCollection,
     TEARelease,
     TEAServerInfo,
 )
@@ -67,12 +83,15 @@ from sbomify.apps.tea.utils import (
 from sbomify.logging import getLogger
 
 if TYPE_CHECKING:
+    from libtea.models import CLE
+
     from sbomify.apps.teams.models import Workspace
 
 log = getLogger(__name__)
 
-# auth=None: TEA endpoints are public per spec (workspace-scoped, no authentication)
-router = Router(tags=["TEA"], auth=None, by_alias=True)
+# auth=None: TEA endpoints are public per spec (workspace-scoped, no authentication).
+# TEA 1.0.0 responses carry no null and no empty default the server did not set.
+router = Router(tags=["TEA"], auth=None, by_alias=True, exclude_none=True, exclude_unset=True)
 
 # TEA collection belongsTo constants
 BELONGS_TO_PRODUCT_RELEASE = CollectionBelongsTo.PRODUCT_RELEASE
@@ -130,6 +149,41 @@ def _get_base_url(request: HttpRequest) -> str:
     return settings.APP_BASE_URL.rstrip("/")
 
 
+def _artifact(fields: dict[str, Any], fmt: dict[str, Any], created_at: datetime) -> TEAArtifact:
+    """Build an artifact with its one format.
+
+    sbomify never changes an uploaded artifact, so each one has a single revision.
+    TEA 1.0.0 publishes a url only with a checksum; without one, a client fetches
+    the format from the download endpoint, which redirects to the url.
+    """
+    if not fmt["checksums"]:
+        fmt = {key: value for key, value in fmt.items() if key not in ("url", "checksums")}
+    return TEAArtifact.model_validate({**fields, "version": 1, "created_date": created_at, "formats": (fmt,)})
+
+
+def _sbom_format(sbom: SBOM, base_url: str = "") -> dict[str, Any]:
+    """The one format of an SBOM-model artifact, url and checksum included."""
+    kind = SBOM.BomType(sbom.bom_type).label if sbom.bom_type in SBOM.BomType.values else "SBOM"
+    return {
+        "media_type": get_artifact_mime_type(sbom.format),
+        "description": f"{_format_display_name(sbom.format)} {kind} ({sbom.format_version})",
+        "url": get_download_url_for_sbom(sbom, base_url=base_url or settings.APP_BASE_URL),
+        "signature_url": sbom.signature_url,
+        "checksums": tuple(_build_checksums(sbom.sha256_hash)),
+    }
+
+
+def _document_format(doc: Document, base_url: str = "") -> dict[str, Any]:
+    """The one format of a document, url and checksum included."""
+    return {
+        "media_type": doc.content_type or "application/octet-stream",
+        "description": f"Document: {doc.document_type or 'unknown'}",
+        "url": get_download_url_for_document(doc, base_url=base_url or settings.APP_BASE_URL),
+        "signature_url": doc.signature_url,
+        "checksums": tuple(_build_checksums(doc.sha256_hash or doc.content_hash)),
+    }
+
+
 def _build_sbom_artifact(sbom: SBOM, base_url: str = "") -> TEAArtifact:
     """Build TEA Artifact from an SBOM-model artifact of any bom_type.
 
@@ -138,40 +192,19 @@ def _build_sbom_artifact(sbom: SBOM, base_url: str = "") -> TEAArtifact:
     description. A VEX maps to VULNERABILITIES, TEA's type for VDR/VEX content.
     """
     artifact_type = TEAArtifactType.VULNERABILITIES if sbom.bom_type == SBOM.BomType.VEX else TEAArtifactType.BOM
-    kind = SBOM.BomType(sbom.bom_type).label if sbom.bom_type in SBOM.BomType.values else "SBOM"
-    return TEAArtifact(
-        uuid=str(sbom.uuid),
-        name=sbom.name,
-        type=artifact_type,
-        distribution_ids=None,
-        formats=(
-            TEAArtifactFormat(
-                media_type=get_artifact_mime_type(sbom.format),
-                description=f"{_format_display_name(sbom.format)} {kind} ({sbom.format_version})",
-                url=get_download_url_for_sbom(sbom, base_url=base_url or settings.APP_BASE_URL),
-                signature_url=sbom.signature_url,
-                checksums=tuple(_build_checksums(sbom.sha256_hash)),
-            ),
-        ),
+    return _artifact(
+        {"uuid": str(sbom.uuid), "name": sbom.name, "type": artifact_type},
+        _sbom_format(sbom, base_url),
+        sbom.created_at,
     )
 
 
 def _build_document_artifact(doc: Document, base_url: str = "") -> TEAArtifact:
     """Build TEA Artifact from a Document."""
-    return TEAArtifact(
-        uuid=str(doc.uuid),
-        name=doc.name,
-        type=get_tea_artifact_type(doc.document_type),  # type: ignore[arg-type]
-        distribution_ids=None,
-        formats=(
-            TEAArtifactFormat(
-                media_type=doc.content_type or "application/octet-stream",
-                description=f"Document: {doc.document_type or 'unknown'}",
-                url=get_download_url_for_document(doc, base_url=base_url or settings.APP_BASE_URL),
-                signature_url=doc.signature_url,
-                checksums=tuple(_build_checksums(doc.sha256_hash or doc.content_hash)),
-            ),
-        ),
+    return _artifact(
+        {"uuid": str(doc.uuid), "name": doc.name, "type": get_tea_artifact_type(doc.document_type)},
+        _document_format(doc, base_url),
+        doc.created_at,
     )
 
 
@@ -283,11 +316,11 @@ def _build_product_release_response(
                 if component_id not in cr_uuid_by_component:
                     cr_uuid_by_component[component_id] = str(cra.component_release.uuid)
 
-        product_components = Component.objects.filter(
-            products=release.product,
-            team_id=release.product.team_id,
-            visibility=Component.Visibility.PUBLIC,
-        ).distinct()
+        product_components = (
+            _published_components()
+            .filter(products=release.product, team_id=release.product.team_id, visibility=Component.Visibility.PUBLIC)
+            .distinct()
+        )
 
         for component in product_components:
             component_ref = TEAComponentRef(
@@ -348,15 +381,14 @@ def _build_collection_response(
 ) -> TEACollection:
     """Build TEA Collection response from sbomify Release artifacts."""
     artifacts = []
-    for artifact in release.artifacts.select_related("sbom__component", "document__component").all():
+    pins = release.artifacts.select_related(
+        "sbom__component", "document__component", "remote_artifact__release__subscription__component"
+    )
+    for artifact in pins:
         # Note: Only PUBLIC components are included in TEA responses (not GATED).
         # GATED components require user authentication/approval and are inappropriate
         # for unauthenticated TEA transparency endpoints.
-        component = None
-        if artifact.sbom:
-            component = artifact.sbom.component
-        elif artifact.document:
-            component = artifact.document.component
+        component = artifact.component
         if component and component.visibility != Component.Visibility.PUBLIC:
             continue
 
@@ -366,26 +398,45 @@ def _build_collection_response(
         else:
             log.info("Skipping unresolvable artifact %s in collection for release %s", artifact.id, release.uuid)
 
-    return TEACollection(
-        uuid=str(release.uuid),
-        version=release.collection_version,
-        date=release.collection_updated_at or release.created_at,
-        belongs_to=belongs_to,
-        update_reason=TEACollectionUpdateReason(
-            type=CollectionUpdateReasonType(release.collection_update_reason),
-            comment=None,
-        ),
-        artifacts=tuple(artifacts),
+    return TEACollection.model_validate(
+        {
+            "uuid": str(release.uuid),
+            "version": release.collection_version,
+            "created_date": release.collection_updated_at or release.created_at,
+            "belongs_to": belongs_to,
+            "update_reason": {"type": CollectionUpdateReasonType(release.collection_update_reason), "comment": None},
+            "artifacts": tuple(artifacts),
+        },
     )
 
 
 def _build_release_artifact(artifact: ReleaseArtifact, base_url: str = "") -> TEAArtifact | None:
-    """Build TEA Artifact from a ReleaseArtifact (SBOM or Document)."""
+    """Build TEA Artifact from a ReleaseArtifact (SBOM, Document or pinned remote artifact)."""
     if artifact.sbom:
         return _build_sbom_artifact(artifact.sbom, base_url=base_url)
     elif artifact.document:
         return _build_document_artifact(artifact.document, base_url=base_url)
+    elif artifact.remote_artifact:
+        return _build_remote_artifact(artifact.remote_artifact)
     return None
+
+
+def _build_remote_artifact(remote_artifact: TeaRemoteArtifact) -> TEAArtifact | None:
+    """A pinned remote artifact as its server published it when pinned: its uuid, version and URLs.
+
+    Distribution ids name the remote server's distributions, not ours, so they are left out.
+    """
+    snapshot = {key: value for key, value in remote_artifact.snapshot.items() if key != "distributionIds"}
+    try:
+        return TEAArtifact.model_validate(snapshot)
+    except PydanticValidationError:
+        log.warning("Pinned remote artifact %s no longer reads as TEA 1.0; leaving it out", remote_artifact.pk)
+        return None
+
+
+def _published_components() -> QuerySet[Component]:
+    """Components this server publishes. A subscription's component is published by the server it follows."""
+    return Component.objects.exclude(component_type=Component.ComponentType.TEA_SUBSCRIPTION)
 
 
 def _build_component_release_collection_response(
@@ -440,277 +491,355 @@ def _build_component_release_collection_response(
         if doc.created_at and doc.created_at > latest_date:
             latest_date = doc.created_at
 
-    return TEACollection(
-        uuid=str(component_release.uuid),
-        version=component_release.collection_version,
-        date=latest_date,
-        belongs_to=belongs_to,
-        update_reason=TEACollectionUpdateReason(
-            type=CollectionUpdateReasonType(component_release.collection_update_reason),
-            comment=None,
-        ),
-        artifacts=tuple(artifacts),
+    return TEACollection.model_validate(
+        {
+            "uuid": str(component_release.uuid),
+            "version": component_release.collection_version,
+            "created_date": latest_date,
+            "belongs_to": belongs_to,
+            "update_reason": {
+                "type": CollectionUpdateReasonType(component_release.collection_update_reason),
+                "comment": None,
+            },
+            "artifacts": tuple(artifacts),
+        },
     )
 
 
+def _discovery_results(
+    request: HttpRequest, team: Workspace, workspace_key: str | None, releases: list[Release]
+) -> list[TEADiscoveryInfo]:
+    """One discovery entry per release, each naming this server and the TEA versions it serves."""
+    server = TEAServerInfo(
+        root_url=build_tea_server_url(team, workspace_key, request=request),
+        versions=(TEA_API_VERSION,),
+        priority=1.0,
+    )
+    return [TEADiscoveryInfo(product_release_uuid=str(release.uuid), servers=(server,)) for release in releases]
+
+
+def _find_artifact(team: Workspace, uuid: str) -> SBOM | Document | None:
+    """Find a public SBOM, or failing that a public document, by its UUID."""
+    artifact_filters = dict(uuid=uuid, component__team=team, component__visibility=Component.Visibility.PUBLIC)
+    sbom = _queryset_get_or_404(SBOM.objects.select_related("component"), **artifact_filters)
+    if not isinstance(sbom, tuple):
+        return sbom
+    document = _queryset_get_or_404(Document.objects.select_related("component"), **artifact_filters)
+    return None if isinstance(document, tuple) else document
+
+
+def _build_artifact(found: SBOM | Document, base_url: str) -> TEAArtifact:
+    if isinstance(found, SBOM):
+        return _build_sbom_artifact(found, base_url=base_url)
+    return _build_document_artifact(found, base_url=base_url)
+
+
+NOT_FOUND = (404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN))
+_PAGE_SALT = "sbomify.tea.v1.page-token"
+
+IdType = Literal["CPE", "TEI", "PURL", "COMPLIANCE_DOCUMENT"]
+SortOrder = Literal["asc", "desc"]
+ReleaseSortField = Literal["createdDate", "releaseDate", "version"]
+
+
+def _invalid(message: str, error: ErrorType = ErrorType.INVALID_REQUEST) -> tuple[int, TEAErrorResponse]:
+    return 400, TEAErrorResponse(error=error, message=message)
+
+
+def _cached(key_builder: Callable[..., tuple[str, ...]]) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """``tea_cached``, keyed under the TEA version too, with its 400 body in the TEA error shape.
+
+    The version keeps a response the 0.4.0 API cached under the same names from being served here.
+    """
+
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        cached = tea_cached(lambda **kwargs: (TEA_API_VERSION, *key_builder(**kwargs)))(func)
+
+        @wraps(func)
+        def wrapper(request: HttpRequest, **kwargs: Any) -> Any:
+            response = cached(request, **kwargs)
+            if isinstance(response, tuple) and isinstance(response[1], TEABadRequestResponse):
+                return _invalid(response[1].error)
+            return response
+
+        return wrapper
+
+    return decorator
+
+
+def _page_key(name: str) -> Callable[..., tuple[str, ...]]:
+    """Cache key for a paginated endpoint: every parameter that changes its response."""
+
+    def key(
+        uuid: str = "",
+        pageSize: int = 25,
+        pageToken: str | None = None,
+        sortField: str = "",
+        sortOrder: str = "asc",
+        idType: str | None = None,
+        idValue: str | None = None,
+        **_: Any,
+    ) -> tuple[str, ...]:
+        token = hash_key_part(pageToken) if pageToken is not None else ""
+        id_value = hash_key_part(idValue) if idValue else ""
+        return (name, uuid, f"size={pageSize}&token={token}&sort={sortField}:{sortOrder}&id={idType}:{id_value}")
+
+    return key
+
+
+def _ordered(queryset: QuerySet[Any], fields: Sequence[str], sort_order: SortOrder) -> QuerySet[Any]:
+    """Order by ``fields``, then ``uuid``, all in ``sort_order``.
+
+    A missing value sorts after the others ascending and before them descending,
+    as TEA 1.0.0 asks of ``releaseDate``.
+    """
+    expressions = [F(field) for field in (*fields, "uuid")]
+    ordering: list[OrderBy] = [
+        e.desc(nulls_first=True) if sort_order == "desc" else e.asc(nulls_last=True) for e in expressions
+    ]
+    return queryset.order_by(*ordering)
+
+
+def _page(
+    request: HttpRequest,
+    page_model: type[Any],
+    rows: QuerySet[Any] | Sequence[Any],
+    build: Callable[[list[Any]], list[Any]],
+    *,
+    page_size: int,
+    page_token: str | None,
+    state: Sequence[str | None],
+) -> tuple[int, Any]:
+    """Answer one page of ``rows``.
+
+    The page token is signed and carries the next offset plus ``state``, the
+    request path and every parameter that selects or orders the results, so a
+    token used with a different query is rejected, as TEA 1.0.0 requires.
+    """
+    query = [request.path, *state]
+    offset = 0
+    if page_token is not None:
+        try:
+            token = signing.loads(page_token, salt=_PAGE_SALT)
+        except signing.BadSignature:
+            return _invalid("pageToken is not valid", ErrorType.INVALID_PAGE_TOKEN)
+        if token.get("query") != query:
+            return _invalid("pageToken belongs to a different query", ErrorType.INVALID_PAGE_TOKEN)
+        offset = token["offset"]
+
+    window = list(rows[offset : offset + page_size + 1])
+    page: dict[str, Any] = {"has_next": len(window) > page_size, "results": build(window[:page_size])}
+    if page["has_next"]:
+        page["next_page_token"] = signing.dumps({"offset": offset + page_size, "query": query}, salt=_PAGE_SALT)
+    return 200, page_model.model_validate(page)
+
+
+def _cle(result: ServiceResult[CLE], uuid: str) -> tuple[int, Any]:
+    if not result.ok:
+        if result.status_code == 500:
+            log.error("CLE conversion error for %s: %s", uuid, result.error)
+        return NOT_FOUND
+    return 200, result.value
+
+
+def _public_releases(product: Product) -> QuerySet[Release]:
+    """A product's releases, leaving out the "latest" alias when the product has versioned ones."""
+    releases = product.releases.all()
+    non_latest = releases.exclude(is_latest=True)
+    return non_latest if non_latest.exists() else releases
+
+
+def _release_rows(releases: list[Release]) -> list[Any]:
+    return [_build_product_release_response(r) for r in _prefetch_releases([r.id for r in releases])]
+
+
+_RELEASE_SORT = {"createdDate": "created_at", "releaseDate": "released_at", "version": "name"}
+# A component release records no separate release date, and reports its creation date as one.
+_COMPONENT_RELEASE_SORT = {"createdDate": "created_at", "releaseDate": "created_at", "version": "version"}
+
+
 # =============================================================================
-# Discovery Endpoints
+# Discovery
 # =============================================================================
 
 
 @router.get(
     "/discovery",
-    response={200: list[TEADiscoveryInfo], 400: TEABadRequestResponse, 404: TEAErrorResponse},
-    summary="Discover TEA resources by TEI",
-    description="Discovery endpoint which resolves TEI into product release UUIDs.",
+    response={200: list[TEADiscoveryInfo], 400: TEAErrorResponse, 404: TEAErrorResponse},
+    summary="Resolve an identifier to TEA Product Releases",
+    description="Resolves a TEI, in either the tei:// or the urn:tei: form, or a PURL to product release UUIDs. "
+    "Give exactly one of tei and purl.",
 )
-@tea_cached(lambda tei, **_: ("discovery", hash_key_part(tei)))
+@_cached(lambda tei=None, purl=None, **_: ("discovery", hash_key_part(f"tei={tei}&purl={purl}")))
 def discovery(
     request: HttpRequest,
-    tei: str = Query(..., max_length=2048, description="Transparency Exchange Identifier (TEI) - URL-encoded string"),  # type: ignore[type-arg]
-    workspace_key: str | None = Query(None, max_length=255, description="Workspace key (for non-custom-domain access)"),  # type: ignore[type-arg]
+    tei: str | None = Query(None, max_length=2048, description="Transparency Exchange Identifier (TEI)"),  # type: ignore[type-arg]
+    purl: str | None = Query(None, max_length=2048, description="Package URL of the product"),  # type: ignore[type-arg]
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
 ) -> Any:
-    """Resolve TEI to product releases."""
     team = getattr(request, TEA_TEAM_ATTR)
+    if (tei is None) == (purl is None):
+        return _invalid("Give exactly one of tei and purl")
 
     try:
-        releases = tea_tei_mapper(team, tei)
+        releases = tea_tei_mapper(team, tei) if tei is not None else tea_purl_mapper(team, purl or "")
     except TEIParseError:
-        log.warning("Discovery: invalid TEI format (tei=%s)", _sanitize_for_log(tei))
-        return 400, TEABadRequestResponse(error="Invalid TEI format")
+        log.warning(
+            "Discovery: invalid identifier (tei=%s, purl=%s)",
+            _sanitize_for_log(tei or ""),
+            _sanitize_for_log(purl or ""),
+        )
+        return _invalid("Invalid TEI" if tei is not None else "Invalid PURL")
 
     if not releases:
-        return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
-
-    # Build discovery response for each release
-    server_url = build_tea_server_url(team, workspace_key, request=request)
-
-    results = [
-        TEADiscoveryInfo(
-            product_release_uuid=str(release.uuid),
-            servers=(
-                TEAServerInfo(
-                    root_url=server_url,
-                    versions=(TEA_API_VERSION,),
-                    priority=1.0,
-                ),
-            ),
-        )
-        for release in releases
-    ]
-
-    return 200, results
+        return NOT_FOUND
+    return 200, _discovery_results(request, team, workspace_key, releases)
 
 
 # =============================================================================
-# Product Endpoints
+# Products and product releases
 # =============================================================================
 
 
 @router.get(
     "/products",
-    response={200: TEAPaginatedProductResponse, 400: TEABadRequestResponse},
-    summary="List products",
-    description="Returns a list of TEA products. Can be filtered by identifier.",
+    response={200: TEAPaginatedProductResponse, 400: TEAErrorResponse},
+    summary="Query TEA Products",
+    description="Returns TEA products, optionally filtered by identifier.",
 )
-@tea_cached(
-    lambda pageOffset=0, pageSize=100, idType=None, idValue=None, **_: (
-        "products",
-        f"page={pageOffset}&size={pageSize}&id_type={idType}&id_value={hash_key_part(idValue) if idValue else None}",
-    )
-)
-def list_products(
+@_cached(_page_key("products"))
+def query_products(
     request: HttpRequest,
     workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
-    idType: str | None = Query(None, max_length=50, description="Type of identifier to filter by"),  # type: ignore[type-arg]
+    idType: IdType | None = Query(None, description="Type of identifier to filter by"),  # type: ignore[type-arg]
     idValue: str | None = Query(None, max_length=2048, description="Identifier value to filter by"),  # type: ignore[type-arg]
-    pageOffset: int = Query(0, ge=0, description="Pagination offset"),  # type: ignore[type-arg]
-    pageSize: int = Query(100, ge=1, le=1000, description="Page size"),  # type: ignore[type-arg]
+    pageSize: int = Query(25, ge=1, le=100, description="The maximum number of results to return"),  # type: ignore[type-arg]
+    pageToken: str | None = Query(None, max_length=2048, description="nextPageToken of the previous page"),  # type: ignore[type-arg]
+    sortField: Literal["name"] = Query("name", description="The field to sort by"),  # type: ignore[type-arg]
+    sortOrder: SortOrder = Query("asc", description="The direction of the sort"),  # type: ignore[type-arg]
 ) -> Any:
-    """List all products in a workspace."""
     team = getattr(request, TEA_TEAM_ATTR)
-
-    # Base queryset - only public products, prefetch identifiers for efficiency
-    products = Product.objects.filter(team=team, is_public=True).prefetch_related("identifiers").order_by("id")
-
-    # Filter by identifier if provided
+    products = Product.objects.filter(team=team, is_public=True).prefetch_related("identifiers")
     if idType and idValue:
         products = _apply_identifier_filter(products, team, idType, idValue)
-
-    # Get total count
-    total = products.count()
-
-    # Apply pagination
-    products = products[pageOffset : pageOffset + pageSize]
-
-    # Build response
-    results = [_build_product_response(p) for p in products]
-
-    return (
-        200,
-        TEAPaginatedProductResponse(
-            timestamp=timezone.now(),
-            page_start_index=pageOffset,
-            page_size=pageSize,
-            total_results=total,
-            results=tuple(results),
-        ),
+    return _page(
+        request,
+        TEAPaginatedProductResponse,
+        _ordered(products, ["name"], sortOrder),
+        lambda rows: [_build_product_response(p) for p in rows],
+        page_size=pageSize,
+        page_token=pageToken,
+        state=[idType, idValue, sortField, sortOrder],
     )
 
 
 @router.get(
     "/product/{uuid}",
-    response={200: TEAProduct, 400: TEABadRequestResponse, 404: TEAErrorResponse},
-    summary="Get product by UUID",
-    description="Get a TEA Product by UUID.",
+    response={200: TEAProduct, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    summary="Get a TEA Product",
 )
-@tea_cached(lambda uuid, **_: ("product", uuid))
+@_cached(lambda uuid, **_: ("product", uuid))
 def get_product(
     request: HttpRequest,
     uuid: str,
     workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
 ) -> Any:
-    """Get a single product by UUID."""
     team = getattr(request, TEA_TEAM_ATTR)
-
-    result = _queryset_get_or_404(Product.objects.prefetch_related("identifiers"), uuid=uuid, team=team, is_public=True)
-    if isinstance(result, tuple):
-        return result
-
-    return 200, _build_product_response(result)
+    product = _queryset_get_or_404(
+        Product.objects.prefetch_related("identifiers"), uuid=uuid, team=team, is_public=True
+    )
+    if isinstance(product, tuple):
+        return product
+    return 200, _build_product_response(product)
 
 
 @router.get(
     "/product/{uuid}/releases",
-    response={200: TEAPaginatedProductReleaseResponse, 400: TEABadRequestResponse, 404: TEAErrorResponse},
-    summary="Get product releases",
-    description="Get releases of the product.",
+    response={200: TEAPaginatedProductReleaseResponse, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    summary="List the releases of a TEA Product",
+    description="A version sorts as a string, in the database's collation.",
 )
-@tea_cached(
-    lambda uuid, pageOffset=0, pageSize=100, **_: ("product", uuid, "releases", f"page={pageOffset}&size={pageSize}")
-)
-def get_product_releases(
+@_cached(_page_key("product_releases"))
+def list_product_releases(
     request: HttpRequest,
     uuid: str,
     workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
-    pageOffset: int = Query(0, ge=0, description="Pagination offset"),  # type: ignore[type-arg]
-    pageSize: int = Query(100, ge=1, le=1000, description="Page size"),  # type: ignore[type-arg]
+    pageSize: int = Query(25, ge=1, le=100, description="The maximum number of results to return"),  # type: ignore[type-arg]
+    pageToken: str | None = Query(None, max_length=2048, description="nextPageToken of the previous page"),  # type: ignore[type-arg]
+    sortField: ReleaseSortField = Query("createdDate", description="The field to sort by"),  # type: ignore[type-arg]
+    sortOrder: SortOrder = Query("asc", description="The direction of the sort"),  # type: ignore[type-arg]
 ) -> Any:
-    """Get releases for a product."""
     team = getattr(request, TEA_TEAM_ATTR)
-
     product = _get_or_404(Product, uuid=uuid, team=team, is_public=True)
     if isinstance(product, tuple):
         return product
-
-    # Single-product scope: exclude "latest" only when this product has versioned releases.
-    base_qs = product.releases.order_by("-created_at", "id")
-    non_latest = base_qs.exclude(is_latest=True)
-    all_releases = non_latest if non_latest.exists() else base_qs
-    total = all_releases.count()
-
-    # Apply pagination, then prefetch for N+1 prevention (preserving order)
-    paginated = all_releases[pageOffset : pageOffset + pageSize]
-    release_ids = [r.id for r in paginated]
-    releases = _prefetch_releases(release_ids)
-
-    results = [_build_product_release_response(r) for r in releases]
-
-    return (
-        200,
-        TEAPaginatedProductReleaseResponse(
-            timestamp=timezone.now(),
-            page_start_index=pageOffset,
-            page_size=pageSize,
-            total_results=total,
-            results=tuple(results),
-        ),
+    return _page(
+        request,
+        TEAPaginatedProductReleaseResponse,
+        _ordered(_public_releases(product), [_RELEASE_SORT[sortField]], sortOrder),
+        _release_rows,
+        page_size=pageSize,
+        page_token=pageToken,
+        state=[sortField, sortOrder],
     )
-
-
-# =============================================================================
-# Product Release Endpoints
-# =============================================================================
 
 
 @router.get(
     "/productReleases",
-    response={200: TEAPaginatedProductReleaseResponse, 400: TEABadRequestResponse},
-    summary="Query product releases",
-    description="Returns a list of TEA product releases. Can be filtered by identifier.",
+    response={200: TEAPaginatedProductReleaseResponse, 400: TEAErrorResponse},
+    summary="Query TEA Product Releases",
+    description="Returns TEA product releases, optionally filtered by identifier. "
+    "A version sorts as a string, in the database's collation.",
 )
-@tea_cached(
-    lambda pageOffset=0, pageSize=100, idType=None, idValue=None, **_: (
-        "product_releases",
-        f"page={pageOffset}&size={pageSize}&id_type={idType}&id_value={hash_key_part(idValue) if idValue else None}",
-    )
-)
+@_cached(_page_key("product_releases_query"))
 def query_product_releases(
     request: HttpRequest,
     workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
-    idType: str | None = Query(None, max_length=50, description="Type of identifier to filter by"),  # type: ignore[type-arg]
+    idType: IdType | None = Query(None, description="Type of identifier to filter by"),  # type: ignore[type-arg]
     idValue: str | None = Query(None, max_length=2048, description="Identifier value to filter by"),  # type: ignore[type-arg]
-    pageOffset: int = Query(0, ge=0, description="Pagination offset"),  # type: ignore[type-arg]
-    pageSize: int = Query(100, ge=1, le=1000, description="Page size"),  # type: ignore[type-arg]
+    pageSize: int = Query(25, ge=1, le=100, description="The maximum number of results to return"),  # type: ignore[type-arg]
+    pageToken: str | None = Query(None, max_length=2048, description="nextPageToken of the previous page"),  # type: ignore[type-arg]
+    sortField: ReleaseSortField = Query("createdDate", description="The field to sort by"),  # type: ignore[type-arg]
+    sortOrder: SortOrder = Query("asc", description="The direction of the sort"),  # type: ignore[type-arg]
 ) -> Any:
-    """Query product releases."""
     team = getattr(request, TEA_TEAM_ATTR)
-
-    # Base queryset - only releases from public products, with prefetch for efficiency.
-    # Per-product: exclude "latest" only when that product has versioned releases.
     products_with_versioned = (
         Release.objects.filter(product__team=team, product__is_public=True, is_latest=False)
         .values_list("product_id", flat=True)
         .distinct()
     )
-    releases = (
-        Release.objects.filter(product__team=team, product__is_public=True)
-        .exclude(is_latest=True, product_id__in=products_with_versioned)
-        .select_related("product")
-        .prefetch_related("product__identifiers")
-        .order_by("-created_at", "id")
+    releases = Release.objects.filter(product__team=team, product__is_public=True).exclude(
+        is_latest=True, product_id__in=products_with_versioned
     )
-
-    # Filter by identifier if provided
     if idType and idValue:
         releases = _apply_identifier_filter(releases, team, idType, idValue, filter_releases=True)
-
-    total = releases.count()
-    paginated = releases[pageOffset : pageOffset + pageSize]
-
-    # Re-query with prefetch for N+1 prevention (preserving order)
-    release_ids = [r.id for r in paginated]
-    paginated = _prefetch_releases(release_ids)
-
-    results = [_build_product_release_response(r) for r in paginated]
-
-    return (
-        200,
-        TEAPaginatedProductReleaseResponse(
-            timestamp=timezone.now(),
-            page_start_index=pageOffset,
-            page_size=pageSize,
-            total_results=total,
-            results=tuple(results),
-        ),
+    return _page(
+        request,
+        TEAPaginatedProductReleaseResponse,
+        _ordered(releases, [_RELEASE_SORT[sortField]], sortOrder),
+        _release_rows,
+        page_size=pageSize,
+        page_token=pageToken,
+        state=[idType, idValue, sortField, sortOrder],
     )
+
+
+def _get_public_release(team: Any, uuid: str) -> Release | tuple[int, TEAErrorResponse]:
+    return _get_or_404(Release, uuid=uuid, product__team=team, product__is_public=True)
 
 
 @router.get(
     "/productRelease/{uuid}",
-    response={200: TEAProductRelease, 400: TEABadRequestResponse, 404: TEAErrorResponse},
-    summary="Get product release by UUID",
-    description="Get a TEA Product Release.",
+    response={200: TEAProductReleaseWithCollection, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    summary="Get a TEA Product Release with its latest collection",
 )
-@tea_cached(lambda uuid, **_: ("product_release", uuid))
+@_cached(lambda uuid, **_: ("product_release", uuid))
 def get_product_release(
     request: HttpRequest,
     uuid: str,
     workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
 ) -> Any:
-    """Get a single product release by UUID."""
     team = getattr(request, TEA_TEAM_ATTR)
-
     release = _queryset_get_or_404(
         Release.objects.select_related("product").prefetch_related(
             Prefetch(
@@ -725,437 +854,571 @@ def get_product_release(
     )
     if isinstance(release, tuple):
         return release
-
-    return 200, _build_product_release_response(release)
-
-
-@router.get(
-    "/productRelease/{uuid}/collection/latest",
-    response={200: TEACollection, 400: TEABadRequestResponse, 404: TEAErrorResponse},
-    summary="Get latest collection for product release",
-    description="Get the latest TEA Collection belonging to the TEA Product Release.",
-)
-@tea_cached(lambda uuid, **_: ("product_release", uuid, "collection", "latest"))
-def get_product_release_latest_collection(
-    request: HttpRequest,
-    uuid: str,
-    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
-) -> Any:
-    """Get the latest collection for a product release."""
-    team = getattr(request, TEA_TEAM_ATTR)
-
-    release = _get_or_404(Release, uuid=uuid, product__team=team, product__is_public=True)
-    if isinstance(release, tuple):
-        return release
-
-    return 200, _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE, base_url=_get_base_url(request))
+    collection = _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE, _get_base_url(request))
+    return 200, TEAProductReleaseWithCollection.model_validate(
+        {**_build_product_release_response(release).model_dump(), "latest_collection": collection}
+    )
 
 
 @router.get(
     "/productRelease/{uuid}/collections",
-    response={200: list[TEACollection], 400: TEABadRequestResponse, 404: TEAErrorResponse},
-    summary="Get all collections for product release",
-    description="Get the TEA Collections belonging to the TEA Product Release.",
+    response={200: TEAPaginatedCollectionResponse, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    summary="List the collections of a TEA Product Release",
+    description="sbomify keeps only the latest collection version, so the list holds that one.",
 )
-@tea_cached(lambda uuid, **_: ("product_release", uuid, "collections"))
-def get_product_release_collections(
+@_cached(_page_key("product_release_collections"))
+def list_product_release_collections(
     request: HttpRequest,
     uuid: str,
     workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+    pageSize: int = Query(25, ge=1, le=100, description="The maximum number of results to return"),  # type: ignore[type-arg]
+    pageToken: str | None = Query(None, max_length=2048, description="nextPageToken of the previous page"),  # type: ignore[type-arg]
+    sortField: Literal["version"] = Query("version", description="The field to sort by"),  # type: ignore[type-arg]
+    sortOrder: SortOrder = Query("asc", description="The direction of the sort"),  # type: ignore[type-arg]
 ) -> Any:
-    """Get all collections for a product release."""
-    team = getattr(request, TEA_TEAM_ATTR)
-
-    release = _get_or_404(Release, uuid=uuid, product__team=team, product__is_public=True)
+    release = _get_public_release(getattr(request, TEA_TEAM_ATTR), uuid)
     if isinstance(release, tuple):
         return release
-
-    # We only have one collection version per release currently
-    collection = _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE, base_url=_get_base_url(request))
-    return 200, [collection]
+    collection = _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE, _get_base_url(request))
+    return _page(
+        request,
+        TEAPaginatedCollectionResponse,
+        [collection],
+        list,
+        page_size=pageSize,
+        page_token=pageToken,
+        state=[sortField, sortOrder],
+    )
 
 
 @router.get(
-    "/productRelease/{uuid}/collection/{version}",
-    response={200: TEACollection, 400: TEABadRequestResponse, 404: TEAErrorResponse},
-    summary="Get specific collection version for product release",
-    description="Get a specific Collection (by version) for a TEA Product Release.",
+    "/productRelease/{uuid}/collection/latest",
+    response={200: TEACollection, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    summary="Get the latest collection of a TEA Product Release",
 )
-@tea_cached(lambda uuid, version, **_: ("product_release", uuid, "collection", str(version)))
-def get_product_release_collection_version(
+@_cached(lambda uuid, **_: ("product_release", uuid, "collection", "latest"))
+def get_latest_product_release_collection(
     request: HttpRequest,
     uuid: str,
-    version: int,
     workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
 ) -> Any:
-    """Get a specific collection version for a product release."""
-    team = getattr(request, TEA_TEAM_ATTR)
-
-    release = _get_or_404(Release, uuid=uuid, product__team=team, product__is_public=True)
+    release = _get_public_release(getattr(request, TEA_TEAM_ATTR), uuid)
     if isinstance(release, tuple):
         return release
+    return 200, _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE, _get_base_url(request))
 
-    # Historical collection snapshots are not stored — only the current version is available.
-    # Reject version <= 0 and any version that isn't the current one.
-    if version < 1 or version != release.collection_version:
-        return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
 
-    return 200, _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE, base_url=_get_base_url(request))
+@router.get(
+    "/productRelease/{uuid}/collection/{int:collectionVersion}",
+    response={200: TEACollection, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    summary="Get one collection version of a TEA Product Release",
+    description="sbomify keeps only the latest collection version; an earlier one is not found.",
+)
+@_cached(lambda uuid, collectionVersion, **_: ("product_release", uuid, "collection", str(collectionVersion)))
+def get_product_release_collection_by_version(
+    request: HttpRequest,
+    uuid: str,
+    collectionVersion: int,
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
+    release = _get_public_release(getattr(request, TEA_TEAM_ATTR), uuid)
+    if isinstance(release, tuple):
+        return release
+    if collectionVersion != release.collection_version:
+        return NOT_FOUND
+    return 200, _build_collection_response(release, BELONGS_TO_PRODUCT_RELEASE, _get_base_url(request))
 
 
 # =============================================================================
-# CLE Endpoints (ECMA-428 Common Lifecycle Enumeration)
+# Components and component releases
 # =============================================================================
 
 
 @router.get(
-    "/product/{uuid}/cle",
-    response={200: TEACLE, 400: TEABadRequestResponse, 404: TEAErrorResponse},
-    summary="Get product CLE",
-    description="Get the Common Lifecycle Enumeration (ECMA-428) document for a product.",
+    "/components",
+    response={200: TEAPaginatedComponentResponse, 400: TEAErrorResponse},
+    summary="Query TEA Components",
+    description="Returns public TEA components. sbomify publishes no component identifiers, "
+    "so an identifier filter matches none.",
 )
-@tea_cached(lambda uuid, **_: ("product", uuid, "cle"))
-def get_product_cle(
+@_cached(_page_key("components"))
+def query_components(
     request: HttpRequest,
-    uuid: str,
     workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+    idType: IdType | None = Query(None, description="Type of identifier to filter by"),  # type: ignore[type-arg]
+    idValue: str | None = Query(None, max_length=2048, description="Identifier value to filter by"),  # type: ignore[type-arg]
+    pageSize: int = Query(25, ge=1, le=100, description="The maximum number of results to return"),  # type: ignore[type-arg]
+    pageToken: str | None = Query(None, max_length=2048, description="nextPageToken of the previous page"),  # type: ignore[type-arg]
+    sortField: Literal["name"] = Query("name", description="The field to sort by"),  # type: ignore[type-arg]
+    sortOrder: SortOrder = Query("asc", description="The direction of the sort"),  # type: ignore[type-arg]
 ) -> Any:
-    """Get CLE document for a product."""
     team = getattr(request, TEA_TEAM_ATTR)
-
-    try:
-        product = Product.objects.get(uuid=uuid, team=team, is_public=True)
-    except (Product.DoesNotExist, DjangoValidationError):
-        return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
-
-    from sbomify.apps.core.services.cle import get_cle_document
-
-    result = get_cle_document(product)
-    if not result.ok:
-        if result.status_code == 500:
-            log.error("CLE conversion error for product %s: %s", uuid, result.error)
-        return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
-
-    return 200, result.value
-
-
-@router.get(
-    "/productRelease/{uuid}/cle",
-    response={200: TEACLE, 400: TEABadRequestResponse, 404: TEAErrorResponse},
-    summary="Get product release CLE",
-    description="Get the Common Lifecycle Enumeration (ECMA-428) document for a product release.",
-)
-@tea_cached(lambda uuid, **_: ("product_release", uuid, "cle"))
-def get_product_release_cle(
-    request: HttpRequest,
-    uuid: str,
-    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
-) -> Any:
-    """Get CLE document for a product release."""
-    team = getattr(request, TEA_TEAM_ATTR)
-
-    release = _get_or_404(Release, uuid=uuid, product__team=team, product__is_public=True)
-    if isinstance(release, tuple):
-        return release
-
-    from sbomify.apps.core.services.cle import get_release_cle_document
-
-    result = get_release_cle_document(release)
-    if not result.ok:
-        if result.status_code == 500:
-            log.error("CLE conversion error for release %s: %s", uuid, result.error)
-        return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
-
-    return 200, result.value
-
-
-# =============================================================================
-# Component Endpoints
-# =============================================================================
+    components = _published_components().filter(team=team, visibility=Component.Visibility.PUBLIC)
+    if idType and idValue:
+        components = components.none()
+    return _page(
+        request,
+        TEAPaginatedComponentResponse,
+        _ordered(components, ["name"], sortOrder),
+        lambda rows: [_build_component_response(c) for c in rows],
+        page_size=pageSize,
+        page_token=pageToken,
+        state=[idType, idValue, sortField, sortOrder],
+    )
 
 
 @router.get(
     "/component/{uuid}",
-    response={200: TEAComponent, 400: TEABadRequestResponse, 404: TEAErrorResponse},
-    summary="Get component by UUID",
-    description="Get a TEA Component.",
+    response={200: TEAComponent, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    summary="Get a TEA Component",
 )
-@tea_cached(lambda uuid, **_: ("component", uuid))
+@_cached(lambda uuid, **_: ("component", uuid))
 def get_component(
     request: HttpRequest,
     uuid: str,
     workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
 ) -> Any:
-    """Get a single component by UUID."""
     team = getattr(request, TEA_TEAM_ATTR)
-
     component = _queryset_get_or_404(
-        Component.objects.all(),
-        uuid=uuid,
-        team=team,
-        visibility=Component.Visibility.PUBLIC,
+        _published_components(), uuid=uuid, team=team, visibility=Component.Visibility.PUBLIC
     )
     if isinstance(component, tuple):
         return component
-
     return 200, _build_component_response(component)
 
 
 @router.get(
     "/component/{uuid}/releases",
-    response={200: list[TEARelease], 400: TEABadRequestResponse, 404: TEAErrorResponse},
-    summary="Get component releases",
-    description="Get releases of the component.",
+    response={200: TEAPaginatedComponentReleaseResponse, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    summary="List the releases of a TEA Component",
+    description="A version sorts as a string, in the database's collation. A component release records "
+    "no separate release date, so releaseDate sorts as createdDate.",
 )
-@tea_cached(lambda uuid, **_: ("component", uuid, "releases"))
-def get_component_releases(
+@_cached(_page_key("component_releases"))
+def list_component_releases(
     request: HttpRequest,
     uuid: str,
     workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+    pageSize: int = Query(25, ge=1, le=100, description="The maximum number of results to return"),  # type: ignore[type-arg]
+    pageToken: str | None = Query(None, max_length=2048, description="nextPageToken of the previous page"),  # type: ignore[type-arg]
+    sortField: ReleaseSortField = Query("createdDate", description="The field to sort by"),  # type: ignore[type-arg]
+    sortOrder: SortOrder = Query("asc", description="The direction of the sort"),  # type: ignore[type-arg]
 ) -> Any:
-    """Get releases for a component.
-
-    TODO: Add pageOffset/pageSize pagination for consistency with get_product_releases,
-    pending a PaginatedComponentReleaseResponse schema in libtea.
-    """
     team = getattr(request, TEA_TEAM_ATTR)
-
-    component = _get_or_404(Component, uuid=uuid, team=team, visibility=Component.Visibility.PUBLIC)
+    component = _queryset_get_or_404(
+        _published_components(), uuid=uuid, team=team, visibility=Component.Visibility.PUBLIC
+    )
     if isinstance(component, tuple):
         return component
-
-    component_releases = (
-        ComponentRelease.objects.filter(component=component).select_related("component").order_by("-created_at", "id")
+    releases = ComponentRelease.objects.filter(component=component).select_related("component")
+    return _page(
+        request,
+        TEAPaginatedComponentReleaseResponse,
+        _ordered(releases, [_COMPONENT_RELEASE_SORT[sortField]], sortOrder),
+        lambda rows: [_build_component_release_response(cr) for cr in rows],
+        page_size=pageSize,
+        page_token=pageToken,
+        state=[sortField, sortOrder],
     )
-    results = [_build_component_release_response(cr) for cr in component_releases]
-    return 200, results
 
 
 @router.get(
-    "/component/{uuid}/cle",
-    response={200: TEACLE, 400: TEABadRequestResponse, 404: TEAErrorResponse},
-    summary="Get component CLE",
-    description="Get the Common Lifecycle Enumeration (ECMA-428) document for a component.",
+    "/componentReleases",
+    response={200: TEAPaginatedComponentReleaseResponse, 400: TEAErrorResponse},
+    summary="Query TEA Component Releases",
+    description="Returns the releases of public TEA components. sbomify publishes no component release "
+    "identifiers, so an identifier filter matches none.",
 )
-@tea_cached(lambda uuid, **_: ("component", uuid, "cle"))
-def get_component_cle(
+@_cached(_page_key("component_releases_query"))
+def query_component_releases(
     request: HttpRequest,
-    uuid: str,
     workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+    idType: IdType | None = Query(None, description="Type of identifier to filter by"),  # type: ignore[type-arg]
+    idValue: str | None = Query(None, max_length=2048, description="Identifier value to filter by"),  # type: ignore[type-arg]
+    pageSize: int = Query(25, ge=1, le=100, description="The maximum number of results to return"),  # type: ignore[type-arg]
+    pageToken: str | None = Query(None, max_length=2048, description="nextPageToken of the previous page"),  # type: ignore[type-arg]
+    sortField: ReleaseSortField = Query("createdDate", description="The field to sort by"),  # type: ignore[type-arg]
+    sortOrder: SortOrder = Query("asc", description="The direction of the sort"),  # type: ignore[type-arg]
 ) -> Any:
-    """Get CLE document for a component."""
     team = getattr(request, TEA_TEAM_ATTR)
+    releases = ComponentRelease.objects.filter(
+        component__team=team, component__visibility=Component.Visibility.PUBLIC
+    ).select_related("component")
+    if idType and idValue:
+        releases = releases.none()
+    return _page(
+        request,
+        TEAPaginatedComponentReleaseResponse,
+        _ordered(releases, [_COMPONENT_RELEASE_SORT[sortField]], sortOrder),
+        lambda rows: [_build_component_release_response(cr) for cr in rows],
+        page_size=pageSize,
+        page_token=pageToken,
+        state=[idType, idValue, sortField, sortOrder],
+    )
 
-    component = _get_or_404(Component, uuid=uuid, team=team, visibility=Component.Visibility.PUBLIC)
-    if isinstance(component, tuple):
-        return component
 
-    from sbomify.apps.core.services.cle import get_component_cle_document
-
-    result = get_component_cle_document(component)
-    if not result.ok:
-        if result.status_code == 500:
-            log.error("CLE conversion error for component %s: %s", uuid, result.error)
-        return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
-
-    return 200, result.value
-
-
-# =============================================================================
-# Component Release Endpoints
-# =============================================================================
+def _get_public_component_release(team: Any, uuid: str) -> ComponentRelease | tuple[int, TEAErrorResponse]:
+    return _queryset_get_or_404(
+        ComponentRelease.objects.select_related("component"),
+        uuid=uuid,
+        component__team=team,
+        component__visibility=Component.Visibility.PUBLIC,
+    )
 
 
 @router.get(
     "/componentRelease/{uuid}",
-    response={200: TEAComponentReleaseWithCollection, 400: TEABadRequestResponse, 404: TEAErrorResponse},
-    summary="Get component release with collection",
-    description="Get the TEA Component Release with its latest collection.",
+    response={200: TEAComponentReleaseWithCollection, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    summary="Get a TEA Component Release with its latest collection",
 )
-@tea_cached(lambda uuid, **_: ("component_release", uuid))
+@_cached(lambda uuid, **_: ("component_release", uuid))
 def get_component_release(
     request: HttpRequest,
     uuid: str,
     workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
 ) -> Any:
-    """Get a component release with its collection."""
-    team = getattr(request, TEA_TEAM_ATTR)
-
-    component_release = _queryset_get_or_404(
-        ComponentRelease.objects.select_related("component"),
-        uuid=uuid,
-        component__team=team,
-        component__visibility=Component.Visibility.PUBLIC,
-    )
+    component_release = _get_public_component_release(getattr(request, TEA_TEAM_ATTR), uuid)
     if isinstance(component_release, tuple):
         return component_release
-
-    release = _build_component_release_response(component_release)
-    base_url = _get_base_url(request)
     collection = _build_component_release_collection_response(
-        component_release, BELONGS_TO_COMPONENT_RELEASE, base_url=base_url
+        component_release, BELONGS_TO_COMPONENT_RELEASE, _get_base_url(request)
     )
-    return 200, TEAComponentReleaseWithCollection(release=release, latest_collection=collection)
-
-
-@router.get(
-    "/componentRelease/{uuid}/collection/latest",
-    response={200: TEACollection, 400: TEABadRequestResponse, 404: TEAErrorResponse},
-    summary="Get latest collection for component release",
-    description="Get the latest TEA Collection belonging to the TEA Component Release.",
-)
-@tea_cached(lambda uuid, **_: ("component_release", uuid, "collection", "latest"))
-def get_component_release_latest_collection(
-    request: HttpRequest,
-    uuid: str,
-    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
-) -> Any:
-    """Get the latest collection for a component release."""
-    team = getattr(request, TEA_TEAM_ATTR)
-
-    component_release = _queryset_get_or_404(
-        ComponentRelease.objects.select_related("component"),
-        uuid=uuid,
-        component__team=team,
-        component__visibility=Component.Visibility.PUBLIC,
-    )
-    if isinstance(component_release, tuple):
-        return component_release
-
-    return 200, _build_component_release_collection_response(
-        component_release, BELONGS_TO_COMPONENT_RELEASE, base_url=_get_base_url(request)
+    return 200, TEAComponentReleaseWithCollection.model_validate(
+        {**_build_component_release_response(component_release).model_dump(), "latest_collection": collection}
     )
 
 
 @router.get(
     "/componentRelease/{uuid}/collections",
-    response={200: list[TEACollection], 400: TEABadRequestResponse, 404: TEAErrorResponse},
-    summary="Get all collections for component release",
-    description="Get the TEA Collections belonging to the TEA Component Release.",
+    response={200: TEAPaginatedCollectionResponse, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    summary="List the collections of a TEA Component Release",
+    description="sbomify keeps only the latest collection version, so the list holds that one.",
 )
-@tea_cached(lambda uuid, **_: ("component_release", uuid, "collections"))
-def get_component_release_collections(
+@_cached(_page_key("component_release_collections"))
+def list_component_release_collections(
     request: HttpRequest,
     uuid: str,
     workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+    pageSize: int = Query(25, ge=1, le=100, description="The maximum number of results to return"),  # type: ignore[type-arg]
+    pageToken: str | None = Query(None, max_length=2048, description="nextPageToken of the previous page"),  # type: ignore[type-arg]
+    sortField: Literal["version"] = Query("version", description="The field to sort by"),  # type: ignore[type-arg]
+    sortOrder: SortOrder = Query("asc", description="The direction of the sort"),  # type: ignore[type-arg]
 ) -> Any:
-    """Get all collections for a component release."""
-    team = getattr(request, TEA_TEAM_ATTR)
-
-    component_release = _queryset_get_or_404(
-        ComponentRelease.objects.select_related("component"),
-        uuid=uuid,
-        component__team=team,
-        component__visibility=Component.Visibility.PUBLIC,
-    )
+    component_release = _get_public_component_release(getattr(request, TEA_TEAM_ATTR), uuid)
     if isinstance(component_release, tuple):
         return component_release
-
     collection = _build_component_release_collection_response(
-        component_release, BELONGS_TO_COMPONENT_RELEASE, base_url=_get_base_url(request)
+        component_release, BELONGS_TO_COMPONENT_RELEASE, _get_base_url(request)
     )
-    return 200, [collection]
+    return _page(
+        request,
+        TEAPaginatedCollectionResponse,
+        [collection],
+        list,
+        page_size=pageSize,
+        page_token=pageToken,
+        state=[sortField, sortOrder],
+    )
 
 
 @router.get(
-    "/componentRelease/{uuid}/collection/{version}",
-    response={200: TEACollection, 400: TEABadRequestResponse, 404: TEAErrorResponse},
-    summary="Get specific collection version for component release",
-    description="Get a specific Collection (by version) for a TEA Component Release.",
+    "/componentRelease/{uuid}/collection/latest",
+    response={200: TEACollection, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    summary="Get the latest collection of a TEA Component Release",
 )
-@tea_cached(lambda uuid, version, **_: ("component_release", uuid, "collection", str(version)))
-def get_component_release_collection_version(
+@_cached(lambda uuid, **_: ("component_release", uuid, "collection", "latest"))
+def get_latest_component_release_collection(
     request: HttpRequest,
     uuid: str,
-    version: int,
     workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
 ) -> Any:
-    """Get a specific collection version for a component release."""
-    team = getattr(request, TEA_TEAM_ATTR)
-
-    component_release = _queryset_get_or_404(
-        ComponentRelease.objects.select_related("component"),
-        uuid=uuid,
-        component__team=team,
-        component__visibility=Component.Visibility.PUBLIC,
-    )
+    component_release = _get_public_component_release(getattr(request, TEA_TEAM_ATTR), uuid)
     if isinstance(component_release, tuple):
         return component_release
-
-    if version < 1 or version != component_release.collection_version:
-        return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
-
     return 200, _build_component_release_collection_response(
-        component_release, BELONGS_TO_COMPONENT_RELEASE, base_url=_get_base_url(request)
+        component_release, BELONGS_TO_COMPONENT_RELEASE, _get_base_url(request)
     )
+
+
+@router.get(
+    "/componentRelease/{uuid}/collection/{int:collectionVersion}",
+    response={200: TEACollection, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    summary="Get one collection version of a TEA Component Release",
+    description="sbomify keeps only the latest collection version; an earlier one is not found.",
+)
+@_cached(lambda uuid, collectionVersion, **_: ("component_release", uuid, "collection", str(collectionVersion)))
+def get_component_release_collection_by_version(
+    request: HttpRequest,
+    uuid: str,
+    collectionVersion: int,
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
+    component_release = _get_public_component_release(getattr(request, TEA_TEAM_ATTR), uuid)
+    if isinstance(component_release, tuple):
+        return component_release
+    if collectionVersion != component_release.collection_version:
+        return NOT_FOUND
+    return 200, _build_component_release_collection_response(
+        component_release, BELONGS_TO_COMPONENT_RELEASE, _get_base_url(request)
+    )
+
+
+# =============================================================================
+# CLE (ECMA-428 Common Lifecycle Enumeration)
+# =============================================================================
+
+
+@router.get(
+    "/product/{uuid}/cle",
+    response={200: TEACLE, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    summary="Get the lifecycle events of a TEA Product",
+)
+@_cached(lambda uuid, **_: ("product", uuid, "cle"))
+def get_product_cle(
+    request: HttpRequest,
+    uuid: str,
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
+    product = _get_or_404(Product, uuid=uuid, team=getattr(request, TEA_TEAM_ATTR), is_public=True)
+    if isinstance(product, tuple):
+        return product
+    return _cle(get_cle_document(product), uuid)
+
+
+@router.get(
+    "/productRelease/{uuid}/cle",
+    response={200: TEACLE, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    summary="Get the lifecycle events of a TEA Product Release",
+)
+@_cached(lambda uuid, **_: ("product_release", uuid, "cle"))
+def get_product_release_cle(
+    request: HttpRequest,
+    uuid: str,
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
+    release = _get_public_release(getattr(request, TEA_TEAM_ATTR), uuid)
+    if isinstance(release, tuple):
+        return release
+    return _cle(get_release_cle_document(release), uuid)
+
+
+@router.get(
+    "/component/{uuid}/cle",
+    response={200: TEACLE, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    summary="Get the lifecycle events of a TEA Component",
+)
+@_cached(lambda uuid, **_: ("component", uuid, "cle"))
+def get_component_cle(
+    request: HttpRequest,
+    uuid: str,
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
+    team = getattr(request, TEA_TEAM_ATTR)
+    component = _queryset_get_or_404(
+        _published_components(), uuid=uuid, team=team, visibility=Component.Visibility.PUBLIC
+    )
+    if isinstance(component, tuple):
+        return component
+    return _cle(get_component_cle_document(component), uuid)
 
 
 @router.get(
     "/componentRelease/{uuid}/cle",
-    response={200: TEACLE, 400: TEABadRequestResponse, 404: TEAErrorResponse},
-    summary="Get component release CLE",
-    description="Get the Common Lifecycle Enumeration (ECMA-428) document for a component release.",
+    response={200: TEACLE, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    summary="Get the lifecycle events of a TEA Component Release",
 )
-@tea_cached(lambda uuid, **_: ("component_release", uuid, "cle"))
+@_cached(lambda uuid, **_: ("component_release", uuid, "cle"))
 def get_component_release_cle(
     request: HttpRequest,
     uuid: str,
     workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
 ) -> Any:
-    """Get CLE document for a component release."""
-    team = getattr(request, TEA_TEAM_ATTR)
-
-    component_release = _queryset_get_or_404(
-        ComponentRelease.objects.select_related("component"),
-        uuid=uuid,
-        component__team=team,
-        component__visibility=Component.Visibility.PUBLIC,
-    )
+    component_release = _get_public_component_release(getattr(request, TEA_TEAM_ATTR), uuid)
     if isinstance(component_release, tuple):
         return component_release
-
-    from sbomify.apps.core.services.cle import get_component_release_cle_document
-
-    result = get_component_release_cle_document(component_release)
-    if not result.ok:
-        if result.status_code == 500:
-            log.error("CLE conversion error for component release %s: %s", uuid, result.error)
-        return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
-
-    return 200, result.value
+    return _cle(get_component_release_cle_document(component_release), uuid)
 
 
 # =============================================================================
-# Artifact Endpoints
+# Artifacts
 # =============================================================================
+#
+# sbomify never changes an uploaded artifact, so every artifact has exactly one
+# revision, version 1, and "latest" is that revision.
+
+
+def _artifact_revision(request: HttpRequest, uuid: str, version: int | None) -> TEAArtifact | tuple[int, Any]:
+    team = getattr(request, TEA_TEAM_ATTR)
+    found = _find_artifact(team, uuid)
+    if found is not None:
+        return _build_artifact(found, _get_base_url(request)) if version in (None, 1) else NOT_FOUND
+    remote = _find_remote(team, uuid, version)
+    built = _build_remote_artifact(remote) if remote is not None else None
+    return built if built is not None else NOT_FOUND
+
+
+def _find_remote(team: Workspace, uuid: str, version: int | None) -> TeaRemoteArtifact | None:
+    """A remote artifact revision this workspace publishes by pinning it into a public product's release.
+
+    Without a version, the highest pinned one, as "latest" means here.
+    """
+    pinned = TeaRemoteArtifact.objects.filter(
+        uuid=uuid,
+        release__subscription__component__team=team,
+        release__subscription__component__visibility=Component.Visibility.PUBLIC,
+        pins__release__product__is_public=True,
+    ).select_related("release__subscription")
+    if version is not None:
+        pinned = pinned.filter(version=version)
+    return pinned.order_by("-version", "-first_seen_at").first()
 
 
 @router.get(
-    "/artifact/{uuid}",
-    response={200: TEAArtifact, 400: TEABadRequestResponse, 404: TEAErrorResponse},
-    summary="Get artifact by UUID",
-    description="Get metadata for specific TEA Artifact.",
+    "/artifact/{uuid}/latest",
+    response={200: TEAArtifact, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    summary="Get the metadata of the latest TEA Artifact revision",
 )
-@tea_cached(lambda uuid, **_: ("artifact", uuid))
-def get_artifact(
+@_cached(lambda uuid, **_: ("artifact", uuid, "latest"))
+def get_latest_artifact(
     request: HttpRequest,
     uuid: str,
     workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
 ) -> Any:
-    """Get artifact metadata by UUID."""
+    artifact = _artifact_revision(request, uuid, None)
+    return artifact if isinstance(artifact, tuple) else (200, artifact)
+
+
+@router.get(
+    "/artifact/{uuid}/{int:artifactVersion}",
+    response={200: TEAArtifact, 400: TEAErrorResponse, 404: TEAErrorResponse},
+    summary="Get the metadata of one TEA Artifact revision",
+)
+@_cached(lambda uuid, artifactVersion, **_: ("artifact", uuid, str(artifactVersion)))
+def get_artifact_by_version(
+    request: HttpRequest,
+    uuid: str,
+    artifactVersion: int,
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
+    artifact = _artifact_revision(request, uuid, artifactVersion)
+    return artifact if isinstance(artifact, tuple) else (200, artifact)
+
+
+def _media_type(value: str) -> tuple[str, list[str]]:
+    """A media type as TEA compares it: type and subtype ignore case, parameters must match exactly."""
+    base, *params = value.split(";")
+    return base.strip().lower(), sorted(param.strip() for param in params if param.strip())
+
+
+def _download(
+    request: HttpRequest, uuid: str, version: int | None, media_type: str | None, *, signature: bool
+) -> HttpResponse | tuple[int, Any]:
+    """Redirect to the content, or the signature, of an artifact revision's one format.
+
+    The format's url is not published when it has no checksum, so this endpoint is
+    where a TEA 1.0.0 client finds that content.
+    """
     team = getattr(request, TEA_TEAM_ATTR)
-
+    found = _find_artifact(team, uuid)
+    if found is None:
+        remote = _find_remote(team, uuid, version)
+        return NOT_FOUND if remote is None else _remote_download(remote, media_type, signature=signature)
+    if version not in (None, 1):
+        return NOT_FOUND
     base_url = _get_base_url(request)
-    artifact_filters = dict(uuid=uuid, component__team=team, component__visibility=Component.Visibility.PUBLIC)
+    fmt = _sbom_format(found, base_url) if isinstance(found, SBOM) else _document_format(found, base_url)
+    if media_type is not None and _media_type(media_type) != _media_type(fmt["media_type"]):
+        return 406, TEAErrorResponse(error=ErrorType.NO_ACCEPTABLE_FORMAT)
+    location = fmt["signature_url"] if signature else fmt["url"]
+    if not location:
+        return 404, TEAErrorResponse(error=ErrorType.SIGNATURE_NOT_FOUND)
+    return HttpResponseRedirect(location)
 
-    # Try to find as SBOM first
-    sbom = _queryset_get_or_404(SBOM.objects.select_related("component"), **artifact_filters)
-    if not isinstance(sbom, tuple):
-        return 200, _build_sbom_artifact(sbom, base_url=base_url)
 
-    # Fall back to Document
-    document = _queryset_get_or_404(Document.objects.select_related("component"), **artifact_filters)
-    if not isinstance(document, tuple):
-        return 200, _build_document_artifact(document, base_url=base_url)
+def _remote_download(
+    remote: TeaRemoteArtifact, media_type: str | None, *, signature: bool
+) -> HttpResponse | tuple[int, Any]:
+    """Redirect to a pinned remote artifact's content on the server that publishes it.
 
-    return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
+    A format the snapshot names without a URL is fetched through that server's own download route.
+    """
+    formats = remote.snapshot.get("formats") or []
+    if media_type is not None:
+        formats = [f for f in formats if _media_type(f.get("mediaType") or "") == _media_type(media_type)]
+        if not formats:
+            return 406, TEAErrorResponse(error=ErrorType.NO_ACCEPTABLE_FORMAT)
+    fmt = formats[0] if formats else {}
+    location = fmt.get("signatureUrl" if signature else "url")
+    if not location:
+        route = f"{remote.release.subscription.api_base_url}/artifact/{remote.uuid}/{remote.version}"
+        location = f"{route}/signature/download" if signature else f"{route}/download"
+        if fmt.get("mediaType"):
+            location = f"{location}?{urlencode({'mediaType': fmt['mediaType']})}"
+    if not location.startswith(("https://", "http://")):
+        return NOT_FOUND
+    return HttpResponseRedirect(location)
+
+
+_DOWNLOAD_RESPONSES: dict[int, Any] = {302: None, 400: TEAErrorResponse, 404: TEAErrorResponse, 406: TEAErrorResponse}
+
+
+@router.get(
+    "/artifact/{uuid}/latest/download",
+    response=_DOWNLOAD_RESPONSES,
+    summary="Download the content of the latest TEA Artifact revision",
+)
+@_cached(lambda uuid, **_: ("artifact", uuid, "latest", "download"))
+def download_latest_artifact(
+    request: HttpRequest,
+    uuid: str,
+    mediaType: str | None = Query(None, max_length=255, description="The mediaType of the format to download"),  # type: ignore[type-arg]
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
+    return _download(request, uuid, None, mediaType, signature=False)
+
+
+@router.get(
+    "/artifact/{uuid}/{int:artifactVersion}/download",
+    response=_DOWNLOAD_RESPONSES,
+    summary="Download the content of one TEA Artifact revision",
+)
+@_cached(lambda uuid, artifactVersion, **_: ("artifact", uuid, str(artifactVersion), "download"))
+def download_artifact_by_version(
+    request: HttpRequest,
+    uuid: str,
+    artifactVersion: int,
+    mediaType: str | None = Query(None, max_length=255, description="The mediaType of the format to download"),  # type: ignore[type-arg]
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
+    return _download(request, uuid, artifactVersion, mediaType, signature=False)
+
+
+@router.get(
+    "/artifact/{uuid}/latest/signature/download",
+    response=_DOWNLOAD_RESPONSES,
+    summary="Download the signature of the latest TEA Artifact revision",
+)
+@_cached(lambda uuid, **_: ("artifact", uuid, "latest", "signature"))
+def download_latest_artifact_signature(
+    request: HttpRequest,
+    uuid: str,
+    mediaType: str | None = Query(None, max_length=255, description="The mediaType of the format to download"),  # type: ignore[type-arg]
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
+    return _download(request, uuid, None, mediaType, signature=True)
+
+
+@router.get(
+    "/artifact/{uuid}/{int:artifactVersion}/signature/download",
+    response=_DOWNLOAD_RESPONSES,
+    summary="Download the signature of one TEA Artifact revision",
+)
+@_cached(lambda uuid, artifactVersion, **_: ("artifact", uuid, str(artifactVersion), "signature"))
+def download_artifact_signature_by_version(
+    request: HttpRequest,
+    uuid: str,
+    artifactVersion: int,
+    mediaType: str | None = Query(None, max_length=255, description="The mediaType of the format to download"),  # type: ignore[type-arg]
+    workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
+) -> Any:
+    return _download(request, uuid, artifactVersion, mediaType, signature=True)

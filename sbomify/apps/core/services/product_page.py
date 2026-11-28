@@ -24,7 +24,7 @@ from sbomify.apps.core.services.inventory_page import (
 )
 from sbomify.apps.core.services.release_lifecycle import replace_choices
 from sbomify.apps.core.services.results import ServiceResult
-from sbomify.apps.tea.mappers import get_product_tei_urn
+from sbomify.apps.tea.mappers import get_product_tei
 
 RELEASE_PREVIEW_SIZE = 5
 
@@ -96,7 +96,7 @@ def build_product_page_context(request: HttpRequest, product_id: str) -> Service
         "unmeasured_open": open_findings == 0 and unassessed > 0,
         "unmeasured_past_sla": past_sla == 0 and unassessed > 0,
     }
-    product_tei = get_product_tei_urn(product_id, workspace.id)
+    product_tei = get_product_tei(product_id, workspace.id)
     copy_values = [{"value": product_id, "title": f"Product ID: {product_id} (click to copy)"}]
     if product_tei:
         copy_values.append({"value": product_tei, "title": f"TEI: {product_tei} (click to copy)"})

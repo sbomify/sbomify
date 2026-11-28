@@ -108,12 +108,8 @@ class TestTEAProductsEndpoint:
         assert response.status_code == 200
         data = response.json()
 
-        assert "timestamp" in data
-        assert "pageStartIndex" in data
-        assert "pageSize" in data
-        assert "totalResults" in data
-        assert "results" in data
-        assert data["totalResults"] == 1
+        assert set(data) == {"hasNext", "results"}
+        assert len(data["results"]) == 1
 
     def test_list_products_pagination(self, tea_enabled_product):
         """Test product listing pagination."""
@@ -126,14 +122,14 @@ class TestTEAProductsEndpoint:
             )
 
         client = Client()
-        url = f"{TEA_URL_PREFIX}/products?workspace_key={tea_enabled_product.team.key}&pageOffset=0&pageSize=3"
+        url = f"{TEA_URL_PREFIX}/products?workspace_key={tea_enabled_product.team.key}&pageSize=3"
 
         response = client.get(url)
 
         assert response.status_code == 200
         data = response.json()
-        assert data["pageSize"] == 3
-        assert len(data["results"]) <= 3
+        assert len(data["results"]) == 3
+        assert data["hasNext"] is True
 
     def test_list_products_filter_by_identifier(self, tea_enabled_product):
         """Test filtering products by identifier."""
@@ -152,7 +148,7 @@ class TestTEAProductsEndpoint:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["totalResults"] == 1
+        assert len(data["results"]) == 1
 
     def test_list_products_private_excluded(self, tea_enabled_product):
         """Test that private products are excluded."""
@@ -189,7 +185,7 @@ class TestTEAProductsEndpoint:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["totalResults"] == 1
+        assert len(data["results"]) == 1
         product_ids = [p["uuid"] for p in data["results"]]
         assert str(tea_enabled_product.uuid) in product_ids
 
@@ -202,19 +198,18 @@ class TestTEAProductsEndpoint:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["totalResults"] == 0
+        assert len(data["results"]) == 0
 
-    def test_list_products_filter_by_unknown_idtype_returns_empty(self, tea_enabled_product):
-        """C2: Unknown idType returns empty results, not unfiltered data."""
+    def test_list_products_filter_by_unknown_idtype_is_rejected(self, tea_enabled_product):
+        """C2: An unknown idType is an invalid request, never unfiltered data."""
         client = Client()
         ws = tea_enabled_product.team.key
         url = f"{TEA_URL_PREFIX}/products?workspace_key={ws}&idType=UNKNOWN_TYPE&idValue=some-value"
 
         response = client.get(url)
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data["totalResults"] == 0
+        assert response.status_code == 400
+        assert response.json()["error"] == "INVALID_REQUEST"
 
 
 @pytest.mark.django_db
@@ -278,7 +273,7 @@ class TestTEAProductReleasesEndpoint:
         data = response.json()
 
         assert "results" in data
-        assert data["totalResults"] == 2
+        assert len(data["results"]) == 2
 
         # Check release structure
         if data["results"]:
@@ -354,7 +349,7 @@ class TestTEAProductReleaseCollectionEndpoints:
         response = client.get(url)
 
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["results"]
 
         assert isinstance(data, list)
         assert len(data) == 1
@@ -429,7 +424,7 @@ class TestTEAComponentReleasesEndpoint:
         response = client.get(url)
 
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["results"]
 
         assert isinstance(data, list)
         assert len(data) == 1
@@ -467,9 +462,9 @@ class TestTEAComponentReleaseEndpoint:
         assert response.status_code == 200
         data = response.json()
 
-        assert "release" in data
+        assert "release" not in data
         assert "latestCollection" in data
-        assert data["release"]["uuid"] == str(cr.uuid)
+        assert data["uuid"] == str(cr.uuid)
         assert data["latestCollection"]["belongsTo"] == "COMPONENT_RELEASE"
 
     def test_get_component_release_not_found(self, tea_enabled_component):
@@ -515,7 +510,7 @@ class TestTEAComponentReleaseCollectionEndpoints:
         assert data["version"] == 1
         assert data["belongsTo"] == "COMPONENT_RELEASE"
         assert "artifacts" in data
-        assert "date" in data
+        assert "createdDate" in data
         assert "updateReason" in data
         assert data["updateReason"]["type"] == "INITIAL_RELEASE"
 
@@ -542,7 +537,7 @@ class TestTEAComponentReleaseCollectionEndpoints:
         response = client.get(url)
 
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["results"]
 
         assert isinstance(data, list)
         assert len(data) == 1
@@ -597,7 +592,7 @@ class TestTEAArtifactEndpoint:
     def test_get_sbom_artifact(self, tea_enabled_component, sample_sbom):
         """Test getting an SBOM artifact."""
         client = Client()
-        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.uuid}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.uuid}/latest?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
 
@@ -610,22 +605,11 @@ class TestTEAArtifactEndpoint:
         assert "formats" in data
         assert len(data["formats"]) == 1
 
-    def test_get_sbom_artifact_uses_distribution_ids(self, tea_enabled_component, sample_sbom):
-        """Test that artifact response uses TEA v0.4.0 'distributionIds' field."""
-        client = Client()
-        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.uuid}?workspace_key={tea_enabled_component.team.key}"
-
-        response = client.get(url)
-
-        assert response.status_code == 200
-        data = response.json()
-        assert "distributionIds" in data
-
     def test_get_artifact_not_found(self, tea_enabled_component):
         """Test getting a non-existent artifact."""
         client = Client()
         ws = tea_enabled_component.team.key
-        url = f"{TEA_URL_PREFIX}/artifact/{NONEXISTENT_UUID}?workspace_key={ws}"
+        url = f"{TEA_URL_PREFIX}/artifact/{NONEXISTENT_UUID}/latest?workspace_key={ws}"
 
         response = client.get(url)
 
@@ -634,7 +618,7 @@ class TestTEAArtifactEndpoint:
     def test_get_sbom_artifact_uses_media_type(self, tea_enabled_component, sample_sbom):
         """Test that artifact response uses 'mediaType' field name (not 'mimeType')."""
         client = Client()
-        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.uuid}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.uuid}/latest?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
 
@@ -651,7 +635,7 @@ class TestTEAArtifactEndpoint:
         sample_sbom.save()
 
         client = Client()
-        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.uuid}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.uuid}/latest?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
 
@@ -664,12 +648,12 @@ class TestTEAArtifactEndpoint:
         assert fmt["checksums"][0]["algValue"] == sample_sbom.sha256_hash
 
     def test_get_sbom_artifact_without_checksum(self, tea_enabled_component, sample_sbom):
-        """Test that artifact has empty checksums when sha256_hash is not set."""
+        """Without a checksum, TEA 1.0.0 publishes neither the checksums nor the url."""
         sample_sbom.sha256_hash = ""
         sample_sbom.save()
 
         client = Client()
-        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.uuid}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.uuid}/latest?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
 
@@ -677,7 +661,8 @@ class TestTEAArtifactEndpoint:
         data = response.json()
 
         fmt = data["formats"][0]
-        assert fmt["checksums"] == []
+        assert "checksums" not in fmt
+        assert "url" not in fmt
 
     def test_get_document_artifact(self, tea_enabled_component):
         """Test getting a Document-type artifact."""
@@ -690,7 +675,7 @@ class TestTEAArtifactEndpoint:
         )
 
         client = Client()
-        url = f"{TEA_URL_PREFIX}/artifact/{doc.uuid}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{doc.uuid}/latest?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
 
@@ -715,7 +700,7 @@ class TestTEAArtifactEndpoint:
         )
 
         client = Client()
-        url = f"{TEA_URL_PREFIX}/artifact/{doc.uuid}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{doc.uuid}/latest?workspace_key={tea_enabled_component.team.key}"
 
         response = client.get(url)
 
@@ -746,9 +731,8 @@ class TestTEAProductReleasesQueryEndpoint:
         assert response.status_code == 200
         data = response.json()
 
-        assert "timestamp" in data
-        assert "results" in data
-        assert data["totalResults"] == 2
+        assert set(data) == {"hasNext", "results"}
+        assert len(data["results"]) == 2
 
     def test_query_product_releases_with_filter(self, tea_enabled_product):
         """Test querying product releases with identifier filter."""
@@ -768,7 +752,7 @@ class TestTEAProductReleasesQueryEndpoint:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["totalResults"] == 1
+        assert len(data["results"]) == 1
 
     def test_query_product_releases_filter_by_tei(self, tea_enabled_product):
         """Test querying product releases with TEI identifier filter."""
@@ -788,7 +772,7 @@ class TestTEAProductReleasesQueryEndpoint:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["totalResults"] == 1
+        assert len(data["results"]) == 1
         release_ids = [r["uuid"] for r in data["results"]]
         assert str(release.uuid) in release_ids
 
@@ -804,7 +788,7 @@ class TestTEAProductReleasesQueryEndpoint:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["totalResults"] == 0
+        assert len(data["results"]) == 0
 
 
 @pytest.mark.django_db
@@ -837,7 +821,7 @@ class TestTEADisabledWorkspace:
 
         response = client.get(url)
         data = response.json()
-        assert "not found or not accessible" in data["error"].lower()
+        assert "not found or not accessible" in data["message"].lower()
 
 
 @pytest.mark.django_db
@@ -1212,7 +1196,7 @@ class TestTEASignatureUrl:
         )
 
         client = Client()
-        url = f"{TEA_URL_PREFIX}/artifact/{sbom.uuid}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{sbom.uuid}/latest?workspace_key={tea_enabled_component.team.key}"
         response = client.get(url)
 
         assert response.status_code == 200
@@ -1220,14 +1204,14 @@ class TestTEASignatureUrl:
         assert data["formats"][0]["signatureUrl"] == "https://example.com/sig/sbom.sig"
 
     def test_sbom_artifact_null_signature_url(self, tea_enabled_component, sample_sbom):
-        """Test that signatureUrl is null when not set."""
+        """Test that signatureUrl is left out when not set."""
         client = Client()
-        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.uuid}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.uuid}/latest?workspace_key={tea_enabled_component.team.key}"
         response = client.get(url)
 
         assert response.status_code == 200
         data = response.json()
-        assert data["formats"][0]["signatureUrl"] is None
+        assert "signatureUrl" not in data["formats"][0]
 
     def test_document_artifact_includes_signature_url(self, tea_enabled_component):
         """Test that Document artifact includes signatureUrl when set."""
@@ -1241,7 +1225,7 @@ class TestTEASignatureUrl:
         )
 
         client = Client()
-        url = f"{TEA_URL_PREFIX}/artifact/{doc.uuid}?workspace_key={tea_enabled_component.team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{doc.uuid}/latest?workspace_key={tea_enabled_component.team.key}"
         response = client.get(url)
 
         assert response.status_code == 200
@@ -1361,7 +1345,7 @@ class TestTEALatestReleaseExclusion:
         response = client.get(url)
         assert response.status_code == 200
         data = response.json()
-        assert data["totalResults"] == 2
+        assert len(data["results"]) == 2
         release_names = [r["version"] for r in data["results"]]
         assert "latest" not in release_names
 
@@ -1376,7 +1360,7 @@ class TestTEALatestReleaseExclusion:
         response = client.get(url)
         assert response.status_code == 200
         data = response.json()
-        assert data["totalResults"] == 1
+        assert len(data["results"]) == 1
 
     def test_query_product_releases_excludes_latest_when_versioned_exists(self, tea_enabled_product):
         """/productReleases should not return 'latest' when versioned releases exist."""
@@ -1389,7 +1373,7 @@ class TestTEALatestReleaseExclusion:
         response = client.get(url)
         assert response.status_code == 200
         data = response.json()
-        assert data["totalResults"] == 1
+        assert len(data["results"]) == 1
         assert data["results"][0]["version"] != "latest"
 
     def test_purl_discovery_excludes_latest_when_versioned_exists(self, tea_enabled_product):
@@ -1441,7 +1425,7 @@ class TestTEALatestReleaseExclusion:
         assert "1.0.0" in versions
         # Product B's "latest" should be excluded (it has versioned releases)
         assert versions.count("latest") == 1
-        assert data["totalResults"] == len(data["results"])
+        assert data["hasNext"] is False
 
     def test_discovery_multi_product_per_product_logic(self, tea_enabled_product):
         """Per-product exclusion in discovery via UUID TEI: product with only
@@ -1514,7 +1498,7 @@ class TestTEAMultiFormatComponentRelease:
 
         response = client.get(url)
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["results"]
 
         versions = [r["version"] for r in data]
         assert len(data) == 2
@@ -1630,7 +1614,7 @@ class TestTEAMultiFormatComponentRelease:
         # Collection date should match collection_updated_at (set when second artifact was added)
         from datetime import datetime
 
-        collection_date_str = data["latestCollection"]["date"]
+        collection_date_str = data["latestCollection"]["createdDate"]
         assert collection_date_str is not None
         # Normalize RFC3339 UTC 'Z' suffix to explicit offset for fromisoformat compatibility
         normalized = (
@@ -1707,7 +1691,7 @@ class TestTEAQualifierAwareDedup:
 
         response = client.get(url)
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["results"]
 
         # Same version but different qualifiers → two distinct releases
         assert len(data) == 2
@@ -1743,7 +1727,7 @@ class TestTEAQualifierAwareDedup:
 
         response = client.get(url)
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["results"]
 
         # Same version + same qualifiers → one release
         assert len(data) == 1
@@ -1810,6 +1794,7 @@ class TestTEABaseURLHandling:
             format="cyclonedx",
             format_version="1.4",
             source="test",
+            sha256_hash="a" * 64,
         )
         ReleaseArtifact.objects.create(release=release, sbom=sbom)
 
@@ -1838,6 +1823,7 @@ class TestTEABaseURLHandling:
             format="cyclonedx",
             format_version="1.4",
             source="test",
+            sha256_hash="a" * 64,
         )
         ReleaseArtifact.objects.create(release=release, sbom=sbom)
 
@@ -1885,7 +1871,7 @@ class TestTEAMalformedUUID:
             "/componentRelease/{uuid}/collection/latest",
             "/componentRelease/{uuid}/collections",
             "/componentRelease/{uuid}/collection/1",
-            "/artifact/{uuid}",
+            "/artifact/{uuid}/latest",
         ],
     )
     def test_malformed_uuid_returns_404(self, tea_enabled_product, path_template):
@@ -1961,7 +1947,7 @@ class TestTEACrossWorkspaceIsolation:
         )
 
         client = Client()
-        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.uuid}?workspace_key={other_team.key}"
+        url = f"{TEA_URL_PREFIX}/artifact/{sample_sbom.uuid}/latest?workspace_key={other_team.key}"
 
         response = client.get(url)
         assert response.status_code == 404
@@ -2020,7 +2006,7 @@ class TestTEAProductCLE:
 
 @pytest.mark.django_db
 class TestTEAComponentCLE:
-    """Tests for GET /tea/v0.4.0/component/{uuid}/cle endpoint."""
+    """Tests for GET /tea/v1.0.0/component/{uuid}/cle endpoint."""
 
     def _cle_url(self, component):
         return f"{TEA_URL_PREFIX}/component/{component.uuid}/cle?workspace_key={component.team.key}"
@@ -2059,7 +2045,7 @@ class TestTEAComponentCLE:
 
 @pytest.mark.django_db
 class TestTEAProductReleaseCLE:
-    """Tests for GET /tea/v0.4.0/productRelease/{uuid}/cle endpoint."""
+    """Tests for GET /tea/v1.0.0/productRelease/{uuid}/cle endpoint."""
 
     @pytest.fixture
     def tea_release(self, tea_enabled_product):
@@ -2098,7 +2084,7 @@ class TestTEAProductReleaseCLE:
 
 @pytest.mark.django_db
 class TestTEAComponentReleaseCLE:
-    """Tests for GET /tea/v0.4.0/componentRelease/{uuid}/cle endpoint."""
+    """Tests for GET /tea/v1.0.0/componentRelease/{uuid}/cle endpoint."""
 
     @pytest.fixture
     def tea_component_release(self, tea_enabled_component):

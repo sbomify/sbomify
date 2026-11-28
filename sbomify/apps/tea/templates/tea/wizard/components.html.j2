@@ -1,0 +1,54 @@
+{% include "tea/wizard/_stepper.html.j2" %}
+<form class="flex flex-col gap-6"
+      hx-post="{% url 'core:tea_subscription_new' %}"
+      hx-target="#tea-wizard"
+      hx-disabled-elt="find button">
+    {% csrf_token %}
+    <input type="hidden" name="step" value="confirm">
+    <input type="hidden" name="server" value="{{ server.base_url }}">
+    <input type="hidden" name="tei" value="{{ tei }}">
+    <c-layout.form-section step="3" title="Select" description="{{ product_release.product_name }} {{ product_release.version }}. Pick the components to follow. Each becomes its own subscription, starting from the release shown.">
+    {% if product_release.components %}
+        <c-cards.card flush>
+        <c-tables.table>
+        <c-tables.head>
+        <c-tables.header-cell><span class="sr-only">Pick</span></c-tables.header-cell>
+        <c-tables.header-cell nowrap>Component</c-tables.header-cell>
+        <c-tables.header-cell>Latest artifacts</c-tables.header-cell>
+        </c-tables.head>
+        <tbody>
+            {% for component in product_release.components %}
+                <c-tables.row>
+                <c-tables.cell>
+                <c-forms.checkbox name="pick" value="{{ component.uuid }}|{{ component.release_uuid }}|{{ component.name }}" aria-label="Follow {{ component.name }}" />
+                </c-tables.cell>
+                <c-tables.cell nowrap class="font-medium">{{ component.name }}</c-tables.cell>
+                <c-tables.cell muted>
+                {% for artifact in component.artifacts %}
+                    <span class="block break-all">{{ artifact.name }} · {{ artifact.type }} · {{ artifact.formats|join:", " }}</span>
+                {% empty %}
+                    No artifacts published
+                {% endfor %}
+                </c-tables.cell>
+                </c-tables.row>
+            {% endfor %}
+        </tbody>
+        </c-tables.table>
+        </c-cards.card>
+        {% if product_release.truncated %}
+            <c-forms.hint>The release lists more components than are shown here.</c-forms.hint>
+        {% endif %}
+    {% else %}
+        <c-cards.card flush>
+        <c-feedback.empty-state icon="fas fa-cube" title="No components" message="This product release lists no components." />
+        </c-cards.card>
+    {% endif %}
+    </c-layout.form-section>
+    {% if product_release.components %}
+        <div class="flex flex-wrap items-center justify-end gap-2">
+            <c-buttons.primary type="submit">
+            <span>Continue</span><i class="fas fa-arrow-right" aria-hidden="true"></i>
+            </c-buttons.primary>
+        </div>
+    {% endif %}
+</form>

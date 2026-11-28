@@ -256,6 +256,9 @@ class ComponentDetailsPublicView(View):
             template_name = "core/component_details_public_sbom.html.j2"
         elif component_type == "document":
             template_name = "core/component_details_public_document.html.j2"
+        elif component_type == "tea_subscription":
+            # Published by the server it follows, not re-published on the Trust Center.
+            return error_response(request, HttpResponse(status=404, content="Component not found"))
         else:
             return error_response(request, HttpResponse(status=400, content="Invalid component type"))
 
