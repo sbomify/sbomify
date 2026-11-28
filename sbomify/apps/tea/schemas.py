@@ -25,9 +25,6 @@ from libtea.models import (
     ComponentRef as TEAComponentRef,
 )
 from libtea.models import (
-    ComponentReleaseWithCollection as TEAComponentReleaseWithCollection,
-)
-from libtea.models import (
     DiscoveryInfo as TEADiscoveryInfo,
 )
 from libtea.models import (
@@ -35,6 +32,15 @@ from libtea.models import (
 )
 from libtea.models import (
     Identifier as TEAIdentifier,
+)
+from libtea.models import (
+    PaginatedCollectionResponse as TEAPaginatedCollectionResponse,
+)
+from libtea.models import (
+    PaginatedComponentReleaseResponse as TEAPaginatedComponentReleaseResponse,
+)
+from libtea.models import (
+    PaginatedComponentResponse as TEAPaginatedComponentResponse,
 )
 from libtea.models import (
     PaginatedProductReleaseResponse as TEAPaginatedProductReleaseResponse,
@@ -47,6 +53,9 @@ from libtea.models import (
 )
 from libtea.models import (
     ProductRelease as TEAProductRelease,
+)
+from libtea.models import (
+    ProductReleaseWithCollection as TEAProductReleaseWithCollection,
 )
 from libtea.models import (
     Release as TEARelease,
@@ -88,7 +97,21 @@ __all__ = [
     "TEAServerInfo",
     "TEAWellKnownEndpoint",
     "TEAWellKnownResponse",
+    "TEAPaginatedCollectionResponse",
+    "TEAPaginatedComponentReleaseResponse",
+    "TEAPaginatedComponentResponse",
+    "TEAProductReleaseWithCollection",
 ]
+
+
+class TEAComponentReleaseWithCollection(TEARelease):
+    """A component release with its latest collection, flat as TEA 1.0.0 defines it.
+
+    libtea's ComponentReleaseWithCollection nests the release under ``release``, the
+    0.4.0 shape, and flattens it only in ``libtea.server.to_wire``.
+    """
+
+    latest_collection: TEACollection
 
 
 class TEABadRequestResponse(BaseModel):

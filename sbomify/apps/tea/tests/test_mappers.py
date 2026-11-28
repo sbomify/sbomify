@@ -18,9 +18,9 @@ from sbomify.apps.tea.mappers import (
     TEA_API_VERSION,
     TEA_IDENTIFIER_TYPE_MAPPING,
     TEIParseError,
-    build_product_tei_urn,
+    build_product_tei,
     build_tea_server_url,
-    get_product_tei_urn,
+    get_product_tei,
     parse_tei,
     tea_identifier_mapper,
     tea_tei_mapper,
@@ -403,24 +403,18 @@ class TestTeaIdentifierMapper:
         assert len(identifiers) == 1
         assert identifiers[0].id_type == "CPE"
 
-    def test_identifier_mapper_gtin_merged(self, sample_product):
-        """Test that different GTIN types are all mapped to GTIN."""
-        ProductIdentifier.objects.create(
-            product=sample_product,
-            team=sample_product.team,
-            identifier_type=ProductIdentifier.IdentifierType.GTIN_8,
-            value="12345678",
-        )
-        ProductIdentifier.objects.create(
-            product=sample_product,
-            team=sample_product.team,
-            identifier_type=ProductIdentifier.IdentifierType.GTIN_13,
-            value="1234567890123",
-        )
+    def test_identifier_mapper_skips_gtin_and_asin(self, sample_product):
+        """TEA 1.0.0 has no identifier type for a GTIN or an ASIN."""
+        for identifier_type, value in (
+            (ProductIdentifier.IdentifierType.GTIN_8, "12345678"),
+            (ProductIdentifier.IdentifierType.GTIN_13, "1234567890123"),
+            (ProductIdentifier.IdentifierType.ASIN, "B08N5WRWNW"),
+        ):
+            ProductIdentifier.objects.create(
+                product=sample_product, team=sample_product.team, identifier_type=identifier_type, value=value
+            )
 
-        identifiers = tea_identifier_mapper(sample_product)
-        assert len(identifiers) == 2
-        assert all(i.id_type == "GTIN" for i in identifiers)
+        assert tea_identifier_mapper(sample_product) == []
 
     def test_identifier_mapper_multiple_types(self, sample_product):
         """Test mapping multiple identifier types."""
@@ -465,8 +459,8 @@ class TestTeaIdentifierMapper:
         ProductIdentifier.objects.create(
             product=sample_product,
             team=sample_product.team,
-            identifier_type=ProductIdentifier.IdentifierType.GTIN_13,
-            value="1234567890123",
+            identifier_type=ProductIdentifier.IdentifierType.CPE,
+            value="cpe:2.3:a:test:product",
         )
 
         identifiers = tea_identifier_mapper(sample_product)
@@ -563,22 +557,22 @@ class TestTeaApiVersion:
 
     def test_tea_api_version_value(self):
         """Test the current TEA API version."""
-        assert TEA_API_VERSION == "0.4.0"
+        assert TEA_API_VERSION == "1.0.0"
 
 
 class TestIdentifierTypeMapping:
     """Tests for identifier type mappings."""
 
-    def test_all_gtin_types_map_to_gtin(self):
-        """Test that all GTIN_* types map to GTIN."""
-        gtin_types = [
+    def test_gtin_and_asin_have_no_tea_type(self):
+        """TEA 1.0.0 defines no GTIN or ASIN identifier type."""
+        for identifier_type in (
             ProductIdentifier.IdentifierType.GTIN_8,
             ProductIdentifier.IdentifierType.GTIN_12,
             ProductIdentifier.IdentifierType.GTIN_13,
             ProductIdentifier.IdentifierType.GTIN_14,
-        ]
-        for gtin_type in gtin_types:
-            assert IDENTIFIER_TYPE_TO_TEA[gtin_type] == "GTIN"
+            ProductIdentifier.IdentifierType.ASIN,
+        ):
+            assert identifier_type not in IDENTIFIER_TYPE_TO_TEA
 
     def test_purl_maps_correctly(self):
         """Test PURL type mapping."""
@@ -587,10 +581,6 @@ class TestIdentifierTypeMapping:
     def test_cpe_maps_correctly(self):
         """Test CPE type mapping."""
         assert IDENTIFIER_TYPE_TO_TEA[ProductIdentifier.IdentifierType.CPE] == "CPE"
-
-    def test_asin_maps_correctly(self):
-        """Test ASIN type mapping."""
-        assert IDENTIFIER_TYPE_TO_TEA[ProductIdentifier.IdentifierType.ASIN] == "ASIN"
 
 
 class TestTeaIdentifierTypeMapping:
@@ -604,17 +594,10 @@ class TestTeaIdentifierTypeMapping:
         """Test CPE reverse mapping."""
         assert TEA_IDENTIFIER_TYPE_MAPPING["CPE"] == [ProductIdentifier.IdentifierType.CPE]
 
-    def test_gtin_mapping_includes_all_variants(self):
-        """Test GTIN reverse mapping includes all GTIN types."""
-        gtin_types = TEA_IDENTIFIER_TYPE_MAPPING["GTIN"]
-        assert ProductIdentifier.IdentifierType.GTIN_8 in gtin_types
-        assert ProductIdentifier.IdentifierType.GTIN_12 in gtin_types
-        assert ProductIdentifier.IdentifierType.GTIN_13 in gtin_types
-        assert ProductIdentifier.IdentifierType.GTIN_14 in gtin_types
-
-    def test_asin_mapping(self):
-        """Test ASIN reverse mapping."""
-        assert TEA_IDENTIFIER_TYPE_MAPPING["ASIN"] == [ProductIdentifier.IdentifierType.ASIN]
+    def test_no_gtin_or_asin_filter(self):
+        """A GTIN or ASIN is not a TEA 1.0.0 identifier type, so nothing filters by one."""
+        assert "GTIN" not in TEA_IDENTIFIER_TYPE_MAPPING
+        assert "ASIN" not in TEA_IDENTIFIER_TYPE_MAPPING
 
     def test_unknown_type_returns_empty(self):
         """Test that unknown type returns empty list via get()."""
@@ -787,21 +770,21 @@ class TestTeaTeiMapperEanupc:
 
 
 @pytest.mark.django_db
-class TestBuildProductTeiUrn:
-    """Tests for build_product_tei_urn helper."""
+class TestBuildProductTei:
+    """Tests for build_product_tei helper."""
 
     TEST_UUID = uuid.UUID("d4d9f54a-abcf-11ee-ac79-1a52914d44b0")
 
     def test_returns_tei_when_enabled_and_validated(self, sample_team):
-        """Returns correct TEI URN when tea_enabled and custom domain is validated."""
+        """Returns the TEI when tea_enabled and custom domain is validated."""
         sample_team.tea_enabled = True
         sample_team.is_public = True
         sample_team.custom_domain = "trust.example.com"
         sample_team.custom_domain_validated = True
         sample_team.save()
 
-        result = build_product_tei_urn(self.TEST_UUID, sample_team, is_public=True)
-        assert result == f"urn:tei:uuid:trust.example.com:{self.TEST_UUID}"
+        result = build_product_tei(self.TEST_UUID, sample_team, is_public=True)
+        assert result == f"tei://trust.example.com/uuid/{self.TEST_UUID}"
 
     def test_returns_none_when_tea_disabled(self, sample_team):
         """Returns None when tea_enabled is False."""
@@ -810,7 +793,7 @@ class TestBuildProductTeiUrn:
         sample_team.custom_domain_validated = True
         sample_team.save()
 
-        assert build_product_tei_urn(self.TEST_UUID, sample_team, is_public=True) is None
+        assert build_product_tei(self.TEST_UUID, sample_team, is_public=True) is None
 
     def test_returns_none_when_domain_not_validated(self, sample_team):
         """Returns None when custom domain is not validated."""
@@ -819,7 +802,7 @@ class TestBuildProductTeiUrn:
         sample_team.custom_domain_validated = False
         sample_team.save()
 
-        assert build_product_tei_urn(self.TEST_UUID, sample_team, is_public=True) is None
+        assert build_product_tei(self.TEST_UUID, sample_team, is_public=True) is None
 
     def test_returns_none_when_no_custom_domain(self, sample_team):
         """Returns None when custom domain is not set."""
@@ -828,7 +811,7 @@ class TestBuildProductTeiUrn:
         sample_team.custom_domain_validated = False
         sample_team.save()
 
-        assert build_product_tei_urn(self.TEST_UUID, sample_team, is_public=True) is None
+        assert build_product_tei(self.TEST_UUID, sample_team, is_public=True) is None
 
     def test_returns_none_when_no_domain_but_validated_true(self, sample_team):
         """Returns None when custom_domain is None even if validated flag is True."""
@@ -837,7 +820,7 @@ class TestBuildProductTeiUrn:
         sample_team.custom_domain_validated = True
         sample_team.save()
 
-        assert build_product_tei_urn(self.TEST_UUID, sample_team, is_public=True) is None
+        assert build_product_tei(self.TEST_UUID, sample_team, is_public=True) is None
 
     def test_returns_none_when_custom_domain_empty_string(self, sample_team):
         """Returns None when custom domain is an empty string."""
@@ -846,7 +829,7 @@ class TestBuildProductTeiUrn:
         sample_team.custom_domain_validated = True
         sample_team.save()
 
-        assert build_product_tei_urn(self.TEST_UUID, sample_team, is_public=True) is None
+        assert build_product_tei(self.TEST_UUID, sample_team, is_public=True) is None
 
     def test_returns_none_when_product_not_public(self, sample_team):
         """Returns None for private products even when TEA is fully configured."""
@@ -855,7 +838,7 @@ class TestBuildProductTeiUrn:
         sample_team.custom_domain_validated = True
         sample_team.save()
 
-        assert build_product_tei_urn(self.TEST_UUID, sample_team, is_public=False) is None
+        assert build_product_tei(self.TEST_UUID, sample_team, is_public=False) is None
 
     def test_returns_none_when_team_not_public(self, team_with_business_plan):
         """Returns None when the workspace is not public."""
@@ -866,15 +849,15 @@ class TestBuildProductTeiUrn:
         team.custom_domain_validated = True
         team.save()
 
-        assert build_product_tei_urn(self.TEST_UUID, team, is_public=True) is None
+        assert build_product_tei(self.TEST_UUID, team, is_public=True) is None
 
 
 @pytest.mark.django_db
-class TestGetProductTeiUrn:
-    """Tests for get_product_tei_urn service function."""
+class TestGetProductTei:
+    """Tests for get_product_tei service function."""
 
     def test_returns_tei_when_team_exists_and_configured(self, sample_product):
-        """Returns TEI URN when team is found and TEA is configured."""
+        """Returns the TEI when team is found and TEA is configured."""
         team = sample_product.team
         team.tea_enabled = True
         team.custom_domain = "trust.example.com"
@@ -884,12 +867,12 @@ class TestGetProductTeiUrn:
         sample_product.is_public = True
         sample_product.save()
 
-        result = get_product_tei_urn(sample_product.id, team.pk)
-        assert result == f"urn:tei:uuid:trust.example.com:{sample_product.uuid}"
+        result = get_product_tei(sample_product.id, team.pk)
+        assert result == f"tei://trust.example.com/uuid/{sample_product.uuid}"
 
     def test_returns_none_when_team_not_found(self, sample_product):
         """Returns None when team ID does not exist."""
-        result = get_product_tei_urn(sample_product.id, 999999)
+        result = get_product_tei(sample_product.id, 999999)
         assert result is None
 
     def test_returns_none_when_tea_not_configured(self, sample_product):
@@ -898,16 +881,16 @@ class TestGetProductTeiUrn:
         team.tea_enabled = False
         team.save()
 
-        result = get_product_tei_urn(sample_product.id, team.pk)
+        result = get_product_tei(sample_product.id, team.pk)
         assert result is None
 
     def test_returns_none_when_team_id_non_numeric(self, sample_product):
         """Returns None when team_id is a non-numeric string."""
-        assert get_product_tei_urn(sample_product.id, "not-a-number") is None
+        assert get_product_tei(sample_product.id, "not-a-number") is None
 
     def test_returns_none_when_team_id_is_none(self, sample_product):
         """Returns None when team_id is None."""
-        assert get_product_tei_urn(sample_product.id, None) is None
+        assert get_product_tei(sample_product.id, None) is None
 
     def test_returns_none_when_product_not_found(self, sample_team):
         """Returns None when product ID does not exist in the database."""
@@ -916,7 +899,7 @@ class TestGetProductTeiUrn:
         sample_team.custom_domain_validated = True
         sample_team.save()
 
-        result = get_product_tei_urn("nonexistent-id", sample_team.pk)
+        result = get_product_tei("nonexistent-id", sample_team.pk)
         assert result is None
 
     def test_returns_none_when_product_not_public(self, sample_product):
@@ -930,4 +913,4 @@ class TestGetProductTeiUrn:
         sample_product.is_public = False
         sample_product.save()
 
-        assert get_product_tei_urn(sample_product.id, team.pk) is None
+        assert get_product_tei(sample_product.id, team.pk) is None

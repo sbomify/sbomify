@@ -8,6 +8,7 @@ The actual API routes are handled by Django Ninja router.
 from django.http import HttpRequest, HttpResponse
 from django.urls import NoReverseMatch, path, reverse
 from ninja import NinjaAPI
+from ninja.errors import ValidationError
 from ninja.openapi.docs import Swagger
 from ninja.types import DictStrAny
 
@@ -102,6 +103,13 @@ def tea_global_exception_handler(request: HttpRequest, exc: Exception) -> HttpRe
         raise exc
     log.exception("Unhandled TEA API error: %s", exc)
     return tea_api.create_response(request, {"error": "Internal server error"}, status=500)
+
+
+@tea_api.exception_handler(ValidationError)
+def tea_invalid_request(request: HttpRequest, exc: ValidationError) -> HttpResponse:
+    """Answer a malformed request with TEA 1.0.0's error body, not ninja's 422."""
+    message = "; ".join(f"{'.'.join(map(str, error['loc'][1:]))}: {error['msg']}" for error in exc.errors)
+    return tea_api.create_response(request, {"error": "INVALID_REQUEST", "message": message}, status=400)
 
 
 tea_api.add_router("/", router)

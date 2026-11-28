@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Callable
 from functools import wraps
+from importlib.metadata import version
 from typing import Any
 
 from django.conf import settings
@@ -21,6 +22,11 @@ log = getLogger(__name__)
 
 TEA_CACHE_PREFIX = "tea"
 
+# Entries are pickled libtea models, so each libtea release reads only its own: an
+# older release's pickle loads without error into the new classes and then
+# serializes without the fields that were renamed.
+LIBTEA_VERSION = version("libtea")
+
 # Attribute name used to pass the resolved Team from the decorator to the endpoint.
 # Set on HttpRequest by @tea_cached; read by endpoints as ``request.tea_team``.
 TEA_TEAM_ATTR = "tea_team"
@@ -28,7 +34,7 @@ TEA_TEAM_ATTR = "tea_team"
 
 def tea_cache_key(workspace_key: str, *parts: str) -> str:
     """Build a namespaced TEA cache key."""
-    return f"{TEA_CACHE_PREFIX}:{workspace_key}:{':'.join(parts)}"
+    return f"{TEA_CACHE_PREFIX}:{workspace_key}:{LIBTEA_VERSION}:{':'.join(parts)}"
 
 
 def hash_key_part(value: str) -> str:

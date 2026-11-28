@@ -8,7 +8,14 @@ from django.core.cache import cache
 from django.test import Client, override_settings
 
 from sbomify.apps.core.models import ReleaseArtifact
-from sbomify.apps.tea.cache import get_tea_cache, hash_key_part, invalidate_tea_cache, set_tea_cache, tea_cache_key
+from sbomify.apps.tea.cache import (
+    LIBTEA_VERSION,
+    get_tea_cache,
+    hash_key_part,
+    invalidate_tea_cache,
+    set_tea_cache,
+    tea_cache_key,
+)
 from sbomify.apps.tea.mappers import TEA_API_VERSION
 from sbomify.apps.tea.signals import _INVALIDATION_SENDERS
 
@@ -30,11 +37,11 @@ class TestCacheHelpers:
 
     def test_tea_cache_key_format(self):
         key = tea_cache_key("ws123", "product", "abc")
-        assert key == "tea:ws123:product:abc"
+        assert key == f"tea:ws123:{LIBTEA_VERSION}:product:abc"
 
     def test_tea_cache_key_single_part(self):
         key = tea_cache_key("ws123", "discovery")
-        assert key == "tea:ws123:discovery"
+        assert key == f"tea:ws123:{LIBTEA_VERSION}:discovery"
 
     @override_settings(TEA_CACHE_TTL=300)
     def test_get_set_cache(self):
@@ -99,7 +106,9 @@ class TestEndpointCaching:
         assert resp1.status_code == 200
 
         # Verify cache key was set
-        cache_key = tea_cache_key(tea_enabled_product.team.key, TEST_ORIGIN, "product", str(tea_enabled_product.uuid))
+        cache_key = tea_cache_key(
+            tea_enabled_product.team.key, TEST_ORIGIN, TEA_API_VERSION, "product", str(tea_enabled_product.uuid)
+        )
         assert get_tea_cache(cache_key) is not None
 
         # Second request — should return same data (from cache)
@@ -128,7 +137,9 @@ class TestEndpointCaching:
         assert resp1.status_code == 200
 
         component_uuid = str(tea_enabled_component.uuid)
-        cache_key = tea_cache_key(tea_enabled_component.team.key, TEST_ORIGIN, "component", component_uuid)
+        cache_key = tea_cache_key(
+            tea_enabled_component.team.key, TEST_ORIGIN, TEA_API_VERSION, "component", component_uuid
+        )
         assert get_tea_cache(cache_key) is not None
 
     @override_settings(TEA_CACHE_TTL=0)
@@ -139,7 +150,9 @@ class TestEndpointCaching:
 
         client.get(url)
 
-        cache_key = tea_cache_key(tea_enabled_product.team.key, TEST_ORIGIN, "product", str(tea_enabled_product.uuid))
+        cache_key = tea_cache_key(
+            tea_enabled_product.team.key, TEST_ORIGIN, TEA_API_VERSION, "product", str(tea_enabled_product.uuid)
+        )
         assert get_tea_cache(cache_key) is None
 
     @override_settings(TEA_CACHE_TTL=300)
@@ -152,7 +165,9 @@ class TestEndpointCaching:
         resp = client.get(url)
         assert resp.status_code == 404
 
-        cache_key = tea_cache_key(tea_enabled_product.team.key, TEST_ORIGIN, "product", fake_uuid)
+        cache_key = tea_cache_key(
+            tea_enabled_product.team.key, TEST_ORIGIN, TEA_API_VERSION, "product", fake_uuid
+        )
         assert get_tea_cache(cache_key) is None
 
 

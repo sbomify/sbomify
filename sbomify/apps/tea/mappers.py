@@ -7,12 +7,12 @@ This module provides helper functions for:
 - Building TEA server URLs for workspaces
 
 Key exports:
-- TEA_API_VERSION: Current TEA API version string (e.g., "0.4.0")
-- build_product_tei_urn: Builds a TEI URN for a product given a Team instance
-- get_product_tei_urn: Service function that builds a TEI URN given a team ID
+- TEA_API_VERSION: The TEA version served
+- build_product_tei: Builds a TEI for a product given a Team instance
+- get_product_tei: Service function that builds a TEI given a team ID
 - build_tea_server_url: Constructs the TEA server root URL for a workspace
 - tea_identifier_mapper: Converts sbomify ProductIdentifier to TEA format
-- tea_tei_mapper: Resolves TEI URNs to sbomify entities
+- tea_tei_mapper: Resolves TEIs to sbomify entities
 """
 
 from __future__ import annotations
@@ -25,6 +25,9 @@ from typing import TYPE_CHECKING, Any
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q, QuerySet
+from libtea.discovery import parse_tei as parse_tei_uri
+from libtea.discovery import purl_from_tei
+from libtea.exceptions import TeaDiscoveryError
 
 from sbomify.apps.core.models import Product, Release
 from sbomify.apps.core.purl import PURLParseError, parse_purl, strip_purl_version
@@ -40,7 +43,7 @@ if TYPE_CHECKING:
 log = getLogger(__name__)
 
 # TEA API version
-TEA_API_VERSION = "0.4.0"
+TEA_API_VERSION = "1.0.0"
 
 # TEI URN pattern: urn:tei:<type>:<domain-name>:<unique-identifier>
 TEI_PATTERN = re.compile(r"^urn:tei:(\w+):([^:]+):(\S+)$")
@@ -73,12 +76,7 @@ TEI_TYPE_TO_IDENTIFIER_TYPE = {
 IDENTIFIER_TYPE_TO_TEA = {
     ProductIdentifier.IdentifierType.PURL: "PURL",
     ProductIdentifier.IdentifierType.CPE: "CPE",
-    ProductIdentifier.IdentifierType.GTIN_8: "GTIN",
-    ProductIdentifier.IdentifierType.GTIN_12: "GTIN",
-    ProductIdentifier.IdentifierType.GTIN_13: "GTIN",
-    ProductIdentifier.IdentifierType.GTIN_14: "GTIN",
-    ProductIdentifier.IdentifierType.ASIN: "ASIN",
-    # Note: SKU, MPN, GS1_GPC_BRICK don't have TEA equivalents
+    # TEA 1.0.0 has no identifier type for GTIN, ASIN, SKU, MPN or GS1_GPC_BRICK
 }
 
 # Mapping from TEA identifier type strings to sbomify ProductIdentifier types
@@ -87,8 +85,6 @@ TEA_IDENTIFIER_TYPE_MAPPING = {
     "PURL": [ProductIdentifier.IdentifierType.PURL],
     "CPE": [ProductIdentifier.IdentifierType.CPE],
     "TEI": None,  # Special case: resolved via tea_tei_mapper, not stored as ProductIdentifier
-    "GTIN": _GTIN_TYPES,
-    "ASIN": [ProductIdentifier.IdentifierType.ASIN],
 }
 
 
@@ -98,12 +94,14 @@ class TEIParseError(ValueError):
 
 def parse_tei(tei: str) -> tuple[str, str, str]:
     """
-    Parse a TEI (Transparency Exchange Identifier) URN.
+    Parse a TEI (Transparency Exchange Identifier).
 
-    TEI format: urn:tei:<type>:<domain-name>:<unique-identifier>
+    Accepts the TEA 0.4.0 URN, ``urn:tei:<type>:<domain-name>:<unique-identifier>``,
+    and the TEA 1.0.0 URI, ``tei://<domain-name>/<type>/<unique-identifier>``. A 1.0.0
+    ``purl`` TEI carries its PURL as Base64URL; the PURL comes back decoded.
 
     Args:
-        tei: The TEI URN string (URL-decoded)
+        tei: The TEI string (URL-decoded)
 
     Returns:
         Tuple of (tei_type, domain_name, unique_identifier)
@@ -113,6 +111,14 @@ def parse_tei(tei: str) -> tuple[str, str, str]:
     """
     if len(tei) < 10:
         raise TEIParseError("Invalid TEI format")
+
+    if tei.startswith("tei://"):
+        try:
+            tei_type, domain, identifier = parse_tei_uri(tei)
+            identifier = purl_from_tei(tei) if tei_type == "purl" else urllib.parse.unquote(identifier)
+        except TeaDiscoveryError as exc:
+            raise TEIParseError("Invalid TEI format") from exc
+        return tei_type, domain, identifier
 
     # URL decode if needed
     decoded_tei = urllib.parse.unquote(tei)
@@ -229,9 +235,10 @@ def _exclude_latest_duplicates(qs: QuerySet[Release]) -> list[Release]:
 
 def tea_tei_mapper(team: Workspace, tei: str) -> list[Release]:
     """
-    Parse TEI URN and return matching product releases.
+    Parse a TEI and return matching product releases.
 
-    TEI format: urn:tei:<type>:<domain-name>:<unique-identifier>
+    TEI formats: urn:tei:<type>:<domain-name>:<unique-identifier> (TEA 0.4.0)
+    and tei://<domain-name>/<type>/<unique-identifier> (TEA 1.0.0)
 
     Supported types:
     - purl: Direct PURL mapping (extract version from PURL if present)
@@ -244,7 +251,7 @@ def tea_tei_mapper(team: Workspace, tei: str) -> list[Release]:
 
     Args:
         team: The workspace/team to search within
-        tei: The TEI URN string
+        tei: The TEI string
 
     Returns:
         List of matching Release objects. Returns all releases for the product
@@ -254,7 +261,20 @@ def tea_tei_mapper(team: Workspace, tei: str) -> list[Release]:
         TEIParseError: If the TEI is invalid
     """
     tei_type, _domain_name, unique_identifier = parse_tei(tei)
+    return _resolve_tei(team, tei_type, unique_identifier)
 
+
+def tea_purl_mapper(team: Workspace, purl: str) -> list[Release]:
+    """Resolve a PURL to product releases, as TEA 1.0.0 discovery by PURL does.
+
+    Raises:
+        TEIParseError: If the PURL is invalid
+    """
+    return _resolve_tei(team, "purl", purl)
+
+
+def _resolve_tei(team: Workspace, tei_type: str, unique_identifier: str) -> list[Release]:
+    """Return the product releases a parsed TEI names."""
     # Handle UUID type specially - direct product lookup
     if tei_type == "uuid":
         try:
@@ -335,15 +355,15 @@ def tea_identifier_mapper(product: Product) -> list[TEAIdentifier]:
     return _build_identifier_list(product.identifiers.all())
 
 
-def build_product_tei_urn(product_uuid: uuid.UUID, team: Workspace, *, is_public: bool) -> str | None:
+def build_product_tei(product_uuid: uuid.UUID, team: Workspace, *, is_public: bool) -> str | None:
     """
-    Build a TEI URN for a product.
+    Build a TEI for a product.
 
-    Returns the TEI URN in the format ``urn:tei:uuid:<domain>:<product_uuid>``
+    Returns the TEA 1.0.0 TEI ``tei://<domain>/uuid/<product_uuid>``
     when the product is public, TEA is enabled, and a validated custom domain
     is configured.  Returns ``None`` otherwise.
 
-    TEI URNs are only meaningful for public products because the TEA discovery
+    TEIs are only meaningful for public products because the TEA discovery
     endpoint (``tea_tei_mapper``) filters on ``is_public=True``.
     """
     if not is_public:
@@ -352,15 +372,15 @@ def build_product_tei_urn(product_uuid: uuid.UUID, team: Workspace, *, is_public
         return None
     if not team.custom_domain or not team.custom_domain_validated:
         return None
-    return f"urn:tei:uuid:{team.custom_domain}:{product_uuid}"
+    return f"tei://{team.custom_domain}/uuid/{product_uuid}"
 
 
-def get_product_tei_urn(product_id: str, team_id: int | str | None) -> str | None:
+def get_product_tei(product_id: str, team_id: int | str | None) -> str | None:
     """
-    Service function that builds a TEI URN for a product given a team ID.
+    Service function that builds a TEI for a product given a team ID.
 
     Looks up the Team by ID and the product's UUID and visibility, then
-    delegates to :func:`build_product_tei_urn`.  Returns ``None`` if the
+    delegates to :func:`build_product_tei`.  Returns ``None`` if the
     team or product is not found, or TEI conditions are not met.
     """
     from sbomify.apps.teams.models import Workspace as TeamModel
@@ -380,7 +400,7 @@ def get_product_tei_urn(product_id: str, team_id: int | str | None) -> str | Non
     if not team:
         return None
 
-    # Short-circuit: skip product query when team can never produce a TEI URN
+    # Short-circuit: skip product query when team can never produce a TEI
     if not team.tea_enabled or not team.is_public or not team.custom_domain or not team.custom_domain_validated:
         return None
 
@@ -389,7 +409,7 @@ def get_product_tei_urn(product_id: str, team_id: int | str | None) -> str | Non
         return None
 
     product_uuid, is_public = row
-    return build_product_tei_urn(product_uuid, team, is_public=is_public)
+    return build_product_tei(product_uuid, team, is_public=is_public)
 
 
 def build_tea_server_url(

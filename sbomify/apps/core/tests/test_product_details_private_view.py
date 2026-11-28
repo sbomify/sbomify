@@ -50,7 +50,7 @@ class TestPrivateViewTeiUrnRendering:
         response = client.get(url)
 
         assert response.status_code == 200
-        expected_urn = f"urn:tei:uuid:trust.example.com:{product.uuid}"
+        expected_urn = f"tei://trust.example.com/uuid/{product.uuid}"
         assert response.context["product_tei"] == expected_urn
 
     def test_tei_urn_hidden_for_non_public_product(self, team, owner_user):
@@ -69,7 +69,7 @@ class TestPrivateViewTeiUrnRendering:
         response = client.get(url)
 
         assert response.status_code == 200
-        assert "urn:tei:uuid:" not in response.content.decode()
+        assert "tei://" not in response.content.decode()
 
     def test_tei_urn_hidden_on_private_page_when_tea_disabled(self, team, product, owner_user):
         """TEI URN should not render on private page when TEA is disabled."""
@@ -83,4 +83,4 @@ class TestPrivateViewTeiUrnRendering:
         response = client.get(url)
 
         assert response.status_code == 200
-        assert "urn:tei:uuid:" not in response.content.decode()
+        assert "tei://" not in response.content.decode()
