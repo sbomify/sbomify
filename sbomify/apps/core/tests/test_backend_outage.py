@@ -11,6 +11,9 @@ faults in their own right and must keep reaching whoever reads them.
 from __future__ import annotations
 
 import logging
+import os
+import socket
+from types import SimpleNamespace
 from typing import Any
 
 import psycopg2
@@ -410,3 +413,342 @@ def _record(name: str, level: int, exc: BaseException | None) -> logging.LogReco
 )
 def test_the_console_drops_only_per_failure_outage_tracebacks(record: logging.LogRecord, dropped: bool) -> None:
     assert is_backend_outage_traceback(record) is dropped
+
+
+def test_sentry_drops_the_worker_line_for_an_attempt_that_will_be_retried(mocker) -> None:
+    """The worker logs "Failed to process message" before Retries decides, so a
+    first attempt carries no retry count. The integration's own event for that
+    attempt carries the verdict and is kept when the message is lost."""
+    mocker.patch.object(sentry_config, "_actor_max_retries", return_value=3)
+    first_attempt = {
+        "logger": "dramatiq.worker.WorkerThread",
+        "contexts": {"dramatiq": {"data": {"actor_name": "sync_integration", "options": {}}}},
+    }
+
+    assert throttle_self_healing_notices(first_attempt, _hint(RedisConnectionError("x"))) is None
+    assert throttle_self_healing_notices(first_attempt, _hint(ValueError("a bug"))) is not None
+
+
+# --- What the services actually raise -----------------------------------------
+# The cases above build their exceptions by hand. These provoke them: a port
+# nothing listens on, Django's and django-redis's real wrappers, the test server
+# refusing a login, a statement timeout and a terminated session.
+
+
+def _closed_port() -> int:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def _postgres(**overrides: Any) -> Any:
+    from django.db import connection
+    from django.db.backends.postgresql.base import DatabaseWrapper
+
+    settings_dict = {**connection.settings_dict, **overrides}
+    settings_dict["OPTIONS"] = {**settings_dict.get("OPTIONS", {}), "connect_timeout": 2}
+    return DatabaseWrapper(settings_dict, alias="outage-probe")
+
+
+@pytest.mark.django_db
+def test_a_postgres_server_that_refuses_the_connection_is_an_outage() -> None:
+    probe = _postgres(HOST="127.0.0.1", PORT=str(_closed_port()))
+
+    with pytest.raises(DjangoOperationalError) as caught:
+        probe.ensure_connection()
+
+    assert unavailable_backend(caught.value) == "postgres"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("overrides", [{"PASSWORD": "not-the-password"}, {"NAME": "sbomify_no_such_database"}])
+def test_a_postgres_server_that_rejects_the_login_is_not_an_outage(overrides: dict[str, str]) -> None:
+    probe = _postgres(**overrides)
+
+    with pytest.raises(DjangoOperationalError) as caught:
+        probe.ensure_connection()
+
+    assert unavailable_backend(caught.value) is None
+
+
+@pytest.mark.django_db
+def test_a_statement_timeout_is_not_an_outage() -> None:
+    from django.db import connection, transaction
+
+    with pytest.raises(DjangoOperationalError) as caught, transaction.atomic(), connection.cursor() as cursor:
+        cursor.execute("SET LOCAL statement_timeout = 1")
+        cursor.execute("SELECT pg_sleep(1)")
+
+    assert unavailable_backend(caught.value) is None
+
+
+@pytest.mark.django_db
+def test_a_terminated_postgres_session_is_an_outage() -> None:
+    from django.db import connection
+
+    victim = _postgres()
+    victim.ensure_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_terminate_backend(%s)", [victim.connection.get_backend_pid()])
+        with pytest.raises((DjangoOperationalError, DjangoInterfaceError)) as caught, victim.cursor() as cursor:
+            cursor.execute("SELECT 1")
+    finally:
+        victim.close()
+
+    assert unavailable_backend(caught.value) == "postgres"
+
+
+@pytest.mark.django_db
+def test_a_cursor_used_after_it_was_closed_is_a_bug_not_an_outage() -> None:
+    """psycopg2 raises InterfaceError for a closed cursor as well as for a
+    closed connection. Only the second is the server going away."""
+    from django.db import connection
+
+    with connection.cursor() as cursor:
+        pass
+    with pytest.raises(DjangoInterfaceError) as caught:
+        cursor.execute("SELECT 1")
+
+    assert "cursor already closed" in str(caught.value)
+    assert unavailable_backend(caught.value) is None
+
+
+def test_a_redis_server_that_refuses_the_connection_is_an_outage() -> None:
+    import redis
+    from django_redis.cache import RedisCache
+
+    port = _closed_port()
+    cache = RedisCache(f"redis://127.0.0.1:{port}/0", {"OPTIONS": {"SOCKET_CONNECT_TIMEOUT": 1}})
+    with pytest.raises(RedisConnectionError) as refused:
+        redis.Redis(host="127.0.0.1", port=port, socket_connect_timeout=1).ping()
+    # django-redis's client raises its wrapper, and the cache API re-raises the cause.
+    with pytest.raises(ConnectionInterrupted) as wrapped:
+        cache.client.get("key")
+    with pytest.raises(RedisConnectionError) as unwrapped:
+        cache.get("key")
+
+    assert unavailable_backend(refused.value) == "redis"
+    assert unavailable_backend(wrapped.value) == "redis"
+    assert unavailable_backend(unwrapped.value) == "redis"
+
+
+def test_a_redis_server_that_rejects_the_password_is_not_an_outage() -> None:
+    import redis
+
+    location = os.environ.get("REDIS_URL")
+    if not location:
+        pytest.skip("needs a Redis server to log in to")
+    with pytest.raises(AuthenticationError) as caught:
+        redis.Redis.from_url(location, password="not-the-password", socket_connect_timeout=1).ping()
+
+    assert unavailable_backend(caught.value) is None
+
+
+def test_a_dramatiq_consumer_losing_redis_is_an_outage() -> None:
+    from dramatiq.brokers.redis import RedisBroker
+
+    consumer = RedisBroker(url=f"redis://127.0.0.1:{_closed_port()}/0", socket_connect_timeout=1).consume("default")
+
+    with pytest.raises(ConnectionClosed) as caught:
+        next(consumer)
+
+    assert unavailable_backend(caught.value) == "redis"
+
+
+# --- The outage end to end -----------------------------------------------------
+
+
+def _unreachable_session(*args: Any, **kwargs: Any) -> Any:
+    raise _wrapped(DjangoOperationalError("x"), psycopg2.OperationalError("connection refused"))
+
+
+@pytest.mark.django_db
+def test_a_session_that_cannot_be_loaded_is_a_503(client, sample_user, mocker, outage_lines) -> None:
+    """The session store is the first thing a signed-in request reads from Postgres."""
+    from django.urls import reverse
+
+    client.raise_request_exception = False
+    client.force_login(sample_user)
+    mocker.patch("django.contrib.sessions.backends.db.SessionStore.load", side_effect=_unreachable_session)
+
+    response = client.get(reverse("core:dashboard"))
+
+    assert response.status_code == 503
+    assert response["Retry-After"] == str(RETRY_AFTER_SECONDS)
+    assert outage_lines
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.urls(__name__)
+@pytest.mark.asyncio
+async def test_an_outage_under_asgi_is_a_503_too(async_client, outage_lines) -> None:
+    """Production serves through the ASGI handler, which converts exceptions in
+    a worker thread. The cause still has to reach the outermost middleware."""
+    async_client.raise_request_exception = False
+    response = await async_client.get("/pg/")
+
+    assert response.status_code == 503
+    assert response["Retry-After"] == str(RETRY_AFTER_SECONDS)
+    assert len(outage_lines) == 1
+
+
+@pytest.mark.django_db
+def test_a_tea_endpoint_answers_an_outage_with_a_json_503(client, mocker, outage_lines) -> None:
+    from sbomify.apps.tea.mappers import TEA_API_VERSION
+
+    client.raise_request_exception = False
+    mocker.patch("sbomify.apps.tea.utils.get_workspace_from_request", side_effect=_unreachable_session)
+
+    response = client.get(f"/tea/v{TEA_API_VERSION}/discovery?tei=urn:tei:uuid:example.com:x&workspace_key=k")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "The service is temporarily unavailable. Please try again in a moment."}
+    assert outage_lines
+
+
+class _User:
+    is_authenticated = True
+    id = 7
+
+
+async def _connect_to_workspace(user: Any, consumer: Any = None) -> list[dict]:
+    from sbomify.apps.core.consumers import WorkspaceConsumer
+
+    sent: list[dict] = []
+    inbox = [{"type": "websocket.connect"}]
+
+    async def send(message: dict) -> None:
+        sent.append(message)
+
+    async def receive() -> dict:
+        return inbox.pop(0) if inbox else {"type": "websocket.disconnect", "code": 1000}
+
+    scope = {
+        "type": "websocket",
+        "path": "/ws/workspace/ws-key/",
+        "url_route": {"kwargs": {"workspace_key": "ws-key"}},
+        "user": user,
+        "headers": [],
+    }
+    await (consumer or WorkspaceConsumer).as_asgi()(scope, receive, send)
+    return sent
+
+
+@pytest.mark.asyncio
+async def test_a_membership_check_on_an_unreachable_database_closes_with_1012(monkeypatch, outage_lines) -> None:
+    from unittest.mock import AsyncMock
+
+    from sbomify.apps.core.consumers import WS_CLOSE_SERVICE_RESTART, WorkspaceConsumer
+
+    monkeypatch.setattr(WorkspaceConsumer, "_check_workspace_membership", AsyncMock(side_effect=_unreachable_session))
+
+    sent = await _connect_to_workspace(_User())
+
+    assert [m.get("code") for m in sent if m["type"] == "websocket.close"] == [WS_CLOSE_SERVICE_RESTART]
+    assert len(outage_lines) == 1
+    assert "websocket connect" in outage_lines[0].getMessage()
+
+
+@pytest.mark.asyncio
+async def test_a_membership_check_that_fails_otherwise_still_raises(monkeypatch, outage_lines) -> None:
+    from unittest.mock import AsyncMock
+
+    from sbomify.apps.core.consumers import WorkspaceConsumer
+
+    monkeypatch.setattr(WorkspaceConsumer, "_check_workspace_membership", AsyncMock(side_effect=ValueError("a bug")))
+
+    with pytest.raises(ValueError):
+        await _connect_to_workspace(_User())
+    assert outage_lines == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("consumer_path", ["consumers.WorkspaceConsumer", "user_consumer.UserConsumer"])
+async def test_a_group_join_on_an_unreachable_redis_closes_with_1012(monkeypatch, outage_lines, consumer_path) -> None:
+    import importlib
+    from unittest.mock import AsyncMock, Mock
+
+    from channels.layers import get_channel_layer
+
+    from sbomify.apps.core.consumers import WS_CLOSE_SERVICE_RESTART, WorkspaceConsumer
+
+    module_name, class_name = consumer_path.split(".")
+    module = importlib.import_module(f"sbomify.apps.core.{module_name}")
+    own_warning = Mock()
+    monkeypatch.setattr(module.logger, "warning", own_warning)
+    monkeypatch.setattr(WorkspaceConsumer, "_check_workspace_membership", AsyncMock(return_value=True))
+    monkeypatch.setattr(get_channel_layer(), "group_add", AsyncMock(side_effect=RedisConnectionError("Error 111")))
+
+    sent = await _connect_to_workspace(_User(), getattr(module, class_name))
+
+    assert [m.get("code") for m in sent if m["type"] == "websocket.close"] == [WS_CLOSE_SERVICE_RESTART]
+    assert [line.getMessage().rsplit(" during ", 1)[1] for line in outage_lines] == ["websocket group join"]
+    own_warning.assert_not_called()
+
+
+def test_the_rate_limiter_reports_an_unreachable_redis_on_the_outage_line(mocker, outage_lines) -> None:
+    from django.test import RequestFactory
+
+    from sbomify.apps.access_tokens.throttling import AnonymousIPRateThrottle
+
+    mocker.patch(
+        "sbomify.apps.access_tokens.throttling.caches",
+        new={"throttle": mocker.Mock(get=mocker.Mock(side_effect=RedisConnectionError("Error 111")))},
+    )
+    own_report = mocker.patch("sbomify.apps.access_tokens.throttling.logger")
+    request = RequestFactory().get("/api/v1/anything", REMOTE_ADDR="203.0.113.7")
+    throttle = AnonymousIPRateThrottle()
+
+    assert [throttle.allow_request(request) for _ in range(3)] == [False, False, False]
+
+    assert len(outage_lines) == 1
+    assert "API rate limiter" in outage_lines[0].getMessage()
+    own_report.exception.assert_not_called()
+
+
+class TestAnOutageOverTime:
+    """A blip reaches Sentry not at all; an outage that lasts reaches it once,
+    as the sustained-fault line. Driven through the real console filter and
+    ``before_send``, with the clock moved by hand."""
+
+    @pytest.fixture
+    def clock(self, mocker):
+        now = [1_000_000.0]
+        mocker.patch.object(sentry_config, "time", SimpleNamespace(monotonic=lambda: now[0]))
+        return now
+
+    @pytest.fixture
+    def sustained(self):
+        capture = _Capture()
+        logger = logging.getLogger("sbomify.resilience")
+        logger.addHandler(capture)
+        try:
+            yield capture.records
+        finally:
+            logger.removeHandler(capture)
+
+    @staticmethod
+    def _sent_to_sentry(records: list[logging.LogRecord]) -> list[logging.LogRecord]:
+        return [r for r in records if throttle_self_healing_notices({"e": 1}, {"log_record": r}) is not None]
+
+    def _outage(self, clock: list[float], seconds: int) -> None:
+        for _ in range(0, seconds, 10):
+            report_backend_outage(
+                _wrapped(DjangoOperationalError("x"), psycopg2.OperationalError("timeout expired")), "web request"
+            )
+            clock[0] += 10
+
+    def test_a_blip_sends_nothing(self, clock, outage_lines, sustained) -> None:
+        self._outage(clock, 60)
+
+        assert len(outage_lines) == 6
+        assert self._sent_to_sentry(outage_lines) == []
+        assert sustained == []
+
+    def test_an_outage_that_lasts_sends_the_sustained_line_once_a_window(self, clock, outage_lines, sustained) -> None:
+        self._outage(clock, 330)
+
+        assert self._sent_to_sentry(outage_lines) == []
+        assert len(sustained) == 1
+        assert self._sent_to_sentry(sustained) == sustained
