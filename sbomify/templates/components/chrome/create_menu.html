@@ -1,5 +1,5 @@
 {% comment %}The creation menu follows live capabilities and uses the shared button and dropdown primitives.{% endcomment %}
-<c-vars can_manage />
+<c-vars can_manage can_administer />
 {% if request.session.current_workspace and can_manage %}
     <div x-data="{ open: false, close() { this.open = false; this.$refs.trigger.focus(); }, first() { this.open = true; this.$nextTick(() => setTimeout(() => { if (this.open) this.$refs.menu.querySelector('[role=menuitem]')?.focus({ preventScroll: true }); })); } }"
          class="relative"
@@ -19,9 +19,11 @@
         <c-dropdowns.item compact icon="fas fa-tag" href="{% url 'core:release_new' %}" @click="open = false">
         Add release
         </c-dropdowns.item>
-        <c-dropdowns.item compact icon="fas fa-shield-halved" href="{% url 'core:security_advisory_new' %}" @click="open = false">
-        Advisory
-        </c-dropdowns.item>
+        {% if can_administer %}
+            <c-dropdowns.item compact icon="fas fa-shield-halved" href="{% url 'core:security_advisory_new' %}" @click="open = false">
+            Advisory
+            </c-dropdowns.item>
+        {% endif %}
         </c-dropdowns.dropdown>
     </div>
 {% endif %}

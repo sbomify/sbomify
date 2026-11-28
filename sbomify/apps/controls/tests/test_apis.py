@@ -85,6 +85,8 @@ class TestCatalogActivation:
         )
 
         assert response.status_code == 403
+        # The holder is an owner, so the refusal names the token, not the role.
+        assert response.json()["detail"] == "This API token's scope does not allow changing controls"
         assert not ControlCatalog.objects.filter(team=sample_team_with_owner_member.team).exists()
 
 

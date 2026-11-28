@@ -4524,9 +4524,9 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
 
     # Handle SBOM
     if payload.sbom_id:
-        try:
-            from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.sboms.models import SBOM
 
+        try:
             sbom = SBOM.objects.get(pk=payload.sbom_id)
             if str(sbom.component.team_id) != str(release.product.team_id):
                 return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
@@ -4562,6 +4562,8 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "replaced": result["replaced"],
                 "replaced_artifact_name": (result.get("replaced_info") or {}).get("replaced_sbom"),
             }
+        except SBOM.DoesNotExist:
+            return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
         except Exception:
             log.exception("Error processing SBOM")
             return 500, {"detail": "Error processing SBOM", "error_code": ErrorCode.INTERNAL_ERROR}
@@ -4574,9 +4576,9 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
 
     # Handle Document
     if payload.document_id:
-        try:
-            from sbomify.apps.documents.models import Document
+        from sbomify.apps.documents.models import Document
 
+        try:
             document = Document.objects.get(pk=payload.document_id)
             if str(document.component.team_id) != str(release.product.team_id):
                 return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
@@ -4611,6 +4613,8 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "replaced": result["replaced"],
                 "replaced_artifact_name": (result.get("replaced_info") or {}).get("replaced_document"),
             }
+        except Document.DoesNotExist:
+            return 404, {"detail": "Document not found", "error_code": ErrorCode.NOT_FOUND}
         except Exception:
             log.exception("Error processing document")
             return 500, {"detail": "Error processing document", "error_code": ErrorCode.INTERNAL_ERROR}

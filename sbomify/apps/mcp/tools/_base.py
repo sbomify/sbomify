@@ -43,6 +43,7 @@ from ..limits import audit, enforce_response_size, untrusted
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
+    from mcp.server.fastmcp.utilities.func_metadata import ArgModelBase
 
     from sbomify.apps.teams.models import Workspace
 
@@ -133,6 +134,26 @@ def _annotations(*, title: str, writes: bool, idempotent: bool | None) -> ToolAn
         # repeat's behaviour is not obvious from the view it delegates to.
         idempotentHint=idempotent if writes else None,
     )
+
+
+def _refuse_unknown_arguments(mcp: FastMCP, name: str) -> None:
+    """Make the tool refuse an argument it does not take, and say so in its schema.
+
+    FastMCP's argument model ignores extra fields, so a call with ``query``
+    where the tool takes ``search`` ran unfiltered and the agent never learned
+    its mistake. FastMCP has no option for this, so the registered tool's model
+    is swapped for a subclass that forbids extras; ``test_a_tool_refuses_an_
+    argument_it_does_not_take`` fails if an mcp upgrade moves these internals.
+    """
+    tool = mcp._tool_manager.get_tool(name)
+    if tool is None:
+        raise RuntimeError(f"MCP tool {name!r} was not registered")
+    base = tool.fn_metadata.arg_model
+    strict = cast(
+        "type[ArgModelBase]", type(base.__name__, (base,), {"model_config": {**base.model_config, "extra": "forbid"}})
+    )
+    tool.fn_metadata.arg_model = strict
+    tool.parameters = strict.model_json_schema(by_alias=True)
 
 
 def mcp_tool(
@@ -260,6 +281,7 @@ def mcp_tool(
             description=inspect.getdoc(fn),
             annotations=_annotations(title=title, writes=writes, idempotent=idempotent),
         )
+        _refuse_unknown_arguments(mcp, name)
         # Return the wrapper, not the bare fn: if a tool is ever called by
         # name from Python, it must not silently skip authentication, the
         # scope gate, the write throttle, the audit event and the size cap.

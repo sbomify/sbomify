@@ -151,6 +151,10 @@ body was not read. A client that speaks MCP OAuth starts its sign-in from this 4
 caller that may upload. A request holds one of the worker's slots while its body arrives, so the
 server stops waiting.
 
+**"Extra inputs are not permitted" from a tool**: the call passed an argument the tool does not take,
+such as `query` where `search_licenses` takes `search`. Each tool's input schema sets
+`additionalProperties: false` and lists the arguments it accepts.
+
 ## Deployment notes
 
 - The server is **stateless** (`stateless_http=True`). Production runs multiple worker processes with

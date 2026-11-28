@@ -23,7 +23,7 @@ Each control owns its state and composes the shared component library.
         {% comment %}No role="toolbar": these are three independent menu triggers,
         not a roving-tabindex group, and each already names itself.{% endcomment %}
         <div class="col-start-2 row-start-1 flex items-center gap-1.5 sm:gap-3 ml-auto shrink-0">
-            <c-chrome.create-menu :can_manage="can_manage" />
+            <c-chrome.create-menu :can_manage="can_manage" :can_administer="can_administer" />
             <c-chrome.notifications />
             <c-chrome.account-menu />
         </div>

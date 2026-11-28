@@ -221,3 +221,28 @@ def test_the_overview_metric_labels_are_not_second_person(
     assert page.status_code == 200
     assert b"Past patch SLA" in page.content
     assert b"Past your patch SLA" not in page.content
+
+
+def test_only_those_who_can_write_advisories_are_offered_one(
+    client: Client, sample_user: User, sample_team_with_owner_member: Member, mocker: MockerFixture
+) -> None:
+    """Writing an advisory takes ADMINISTER. A member offered the link landed on a 404."""
+    from sbomify.apps.core.models import Product
+
+    member = sample_team_with_owner_member
+    workspace = member.team
+    Product.objects.create(team=workspace, name="Advisory target")
+    setup_authenticated_client_session(client, workspace, sample_user)
+    session = client.session
+    session["current_workspace"]["has_completed_wizard"] = True
+    session.save()
+    mocker.patch("sbomify.apps.billing.config.needs_plan_selection", return_value=False)
+    new_advisory = reverse("core:security_advisory_new").encode()
+
+    for role, offered in (("owner", True), ("admin", True), ("member", False)):
+        member.role = role
+        member.save(update_fields=["role"])
+        for page in (reverse("core:dashboard"), reverse("core:products_dashboard")):
+            response = client.get(page)
+            assert response.status_code == 200
+            assert (new_advisory in response.content) is offered, f"{role} on {page}"

@@ -12,7 +12,9 @@ runs every available verification source in one pass:
    first rewritten in the current format, with its inclusion proof from
    Rekor. The signer is reported, not judged.
 4. Checks whether a sbomify-stored provenance attestation is attached
-   and verifies its subject digest matches the SBOM hash.
+   and whether a subject digest matches the SBOM hash. It counts as an
+   attestation only when a Sigstore bundle's DSSE signature verifies
+   over a statement naming the SBOM.
 5. If the SBOM declares a GitHub VCS link, fetches the GitHub Sigstore
    attestation bundle from the public Attestations API and verifies it
    with ``cosign verify-blob-attestation``. A missing attestation is only
@@ -99,7 +101,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
     that drives ``_is_passing`` for upstream consumers (BSI, FDA, etc.).
     """
 
-    VERSION = "2.1.0"
+    VERSION = "2.2.0"
 
     # Stored sources that can verify an SBOM without GitHub.
     _CRYPTO_FINDING_IDS = frozenset({"verification:signature-valid", "verification:provenance-digest"})
@@ -587,14 +589,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             )
 
         if (subject := matching_subject(statements, expected_hash)) is not None:
-            return Finding(
-                id="verification:provenance-digest",
-                title="Provenance Digest Matches",
-                description="A provenance subject SHA-256 digest matches the stored SBOM hash.",
-                status="pass",
-                severity="info",
-                metadata={"matched_subject": subject.get("name"), "digest": expected_hash},
-            )
+            return self._signed_provenance_finding(blob, expected_hash, subject.get("name"))
 
         return Finding(
             id="verification:provenance-digest",
@@ -606,6 +601,81 @@ class SBOMVerificationPlugin(AssessmentPlugin):
                 "expected_hash": expected_hash,
                 "subject_digests": digests,
             },
+        )
+
+    def _signed_provenance_finding(self, blob: bytes, expected_hash: str, subject_name: Any) -> Finding:
+        """A subject matches; pass only if a Sigstore bundle signs a statement naming the SBOM.
+
+        Anyone who can upload can write a Statement naming the SBOM's digest,
+        so the match alone does not say who built it.
+        """
+        metadata: dict[str, Any] = {"matched_subject": subject_name, "digest": expected_hash}
+        text = blob.decode("utf-8")
+        try:
+            documents = [json.loads(text)]
+        except json.JSONDecodeError:
+            documents = [json.loads(line) for line in text.splitlines() if line.strip()]
+        bundles = [doc for doc in documents if "dsseEnvelope" in doc and "verificationMaterial" in doc]
+
+        error = ""
+        if bundles:
+            try:
+                from sigstore.models import Bundle
+                from sigstore.verify import Verifier
+                from sigstore.verify.policy import UnsafeNoOp
+            except ImportError:
+                return Finding(
+                    id="verification:provenance-digest",
+                    title="Sigstore Library Not Available",
+                    description="The sigstore library is not installed, so the provenance signature cannot be checked.",
+                    status="warning",
+                    severity="medium",
+                    metadata=metadata,
+                )
+            verifier = Verifier.production()
+            for document in bundles:
+                try:
+                    bundle = Bundle.from_json(json.dumps(document))
+                    _, payload = verifier.verify_dsse(bundle, UnsafeNoOp())
+                    statement = json.loads(payload)
+                except Exception as exc:
+                    error = self._short_error(exc)
+                    continue
+                if isinstance(statement, dict) and matching_subject([statement], expected_hash) is not None:
+                    signer = self._signer_identity(bundle.signing_certificate)
+                    return Finding(
+                        id="verification:provenance-digest",
+                        title="Signed Provenance Matches",
+                        description=(
+                            f"A signed provenance attestation names this SBOM's SHA-256 digest. "
+                            f"Signed by {signer.get('identity', 'an unknown identity')}, "
+                            f"issued by {signer.get('issuer', 'an unknown issuer')}."
+                        ),
+                        status="pass",
+                        severity="info",
+                        metadata={**metadata, **signer},
+                    )
+
+        if error:
+            return Finding(
+                id="verification:provenance-digest",
+                title="Provenance Signature Invalid",
+                description=f"The provenance names this SBOM, but its signature did not verify: {error}",
+                status="fail",
+                severity="high",
+                metadata={**metadata, "error": error},
+            )
+        return Finding(
+            id="verification:provenance-digest",
+            title="Provenance Not Signed",
+            description=(
+                "The provenance names this SBOM, but it is not a signed Sigstore bundle, so sbomify cannot "
+                "check who made it. Attach the bundle that cosign attest-blob --bundle or GitHub artifact "
+                "attestations write."
+            ),
+            status="warning",
+            severity="medium",
+            metadata=metadata,
         )
 
     # ------------------------------------------------------------------
@@ -653,6 +723,20 @@ class SBOMVerificationPlugin(AssessmentPlugin):
 
         github_org = vcs_info.get("org", "")
         github_repo = vcs_info.get("repo", "")
+        if vcs_info.get("source") != "document":
+            # Only a package names a repository. That project's attestations are for
+            # its own builds, never for this SBOM, so asking it only bought hours of
+            # retries ending on "No attestation found".
+            return self._gha_finding(
+                "warning",
+                "No GitHub Repository for This SBOM",
+                (
+                    f"The SBOM names a GitHub repository only for one of its packages "
+                    f"({github_org}/{github_repo}), not for itself. sbomify looks for a GitHub "
+                    "attestation in the repository the SBOM's own subject names, so it did not ask."
+                ),
+                metadata={"reason": "vcs_from_package", "vcs_source": vcs_info.get("source", "package")},
+            )
         # ``--certificate-identity-regexp`` interprets its argument as a
         # regex, so any metacharacters (``.``, ``+``, etc.) in the org or
         # repo would broaden the match and weaken identity verification.
@@ -667,20 +751,13 @@ class SBOMVerificationPlugin(AssessmentPlugin):
         precomputed = context.sha256_hash if context else None
         digest = precomputed or hashlib.sha256(sbom_data).hexdigest()
 
-        # Qualified when the repository came from a dependency rather than from
-        # the document's own subject. _extract_vcs_info falls back to the first
-        # component carrying a VCS reference, which for a Python SBOM is
-        # typically an upstream OSS project — naming it unqualified tells the
-        # reader to go and fix a workflow in a repository they do not own.
-        repo_provenance = "" if vcs_info.get("source") == "document" else " (from a package reference in the SBOM)"
-
         # Per-source failures below emit ``warning`` rather than ``fail`` so
         # they don't drive ``fail_count > 0`` on the run when another source
         # (stored signature/provenance) has already verified the SBOM. The
         # aggregating ``verification:attestation`` summary is the single
         # ``fail`` signal for "no source verified" — it's what BSI's
         # ``requires_one_of: attestation`` consumes.
-        bundle = self._download_github_bundle(github_org, github_repo, digest, repo_provenance)
+        bundle = self._download_github_bundle(github_org, github_repo, digest)
         if not bundle.get("success"):
             return self._gha_finding(
                 "warning",
@@ -696,7 +773,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
                 # can see both sides.
                 (
                     f"Could not retrieve an attestation from GitHub for this SBOM. sbomify asked "
-                    f"{github_org}/{github_repo}{repo_provenance} for subject digest "
+                    f"{github_org}/{github_repo} for subject digest "
                     f"sha256:{digest}, the SHA-256 of this SBOM as sbomify stored it. GitHub's "
                     f"response: {bundle.get('error', 'unknown')}. If the attestation exists and "
                     f"the digest above does not match its subject, the workflow is attesting a "
@@ -809,7 +886,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
                 delays.append(3600)
         return max(delays, default=3600)
 
-    def _download_github_bundle(self, org: str, repo: str, digest: str, repo_provenance: str = "") -> dict[str, Any]:
+    def _download_github_bundle(self, org: str, repo: str, digest: str) -> dict[str, Any]:
         """Fetch the attestation bundle from GitHub's public Attestations API.
 
         Raises ``AttestationNotYetAvailableError`` on ``404`` and
@@ -845,7 +922,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             # image, or a copy of the SBOM written before augmentation rewrote
             # it) is the failure mode that never resolves however long we retry.
             raise AttestationNotYetAvailableError(
-                f"GitHub returned no attestation for this SBOM from {org}/{repo}{repo_provenance}. "
+                f"GitHub returned no attestation for this SBOM from {org}/{repo}. "
                 f"sbomify asked for the SHA-256 of the SBOM as sbomify stored it: sha256:{digest}. "
                 f"If the workflow has no attest step, add actions/attest-build-provenance for the "
                 f"file you upload. If it already attests, it attested a different file, such as a "
@@ -855,7 +932,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             )
         if self._is_rate_limited(response):
             raise GitHubRateLimitedError(
-                f"GitHub refused the attestation lookup for this SBOM from {org}/{repo}{repo_provenance} "
+                f"GitHub refused the attestation lookup for this SBOM from {org}/{repo} "
                 f"because sbomify reached GitHub's API rate limit. This says nothing about the SBOM or its "
                 f"attestation. sbomify asked for sha256:{digest}. Run the assessment again later.",
                 title="GitHub rate limit reached",
@@ -1147,7 +1224,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             title="No Attestation Source Available",
             description=(
                 "No cryptographic attestation could be verified for this SBOM. "
-                "Attach a cosign-bundle signature, a provenance attestation, or "
+                "Attach a cosign-bundle signature, a signed provenance bundle, or "
                 "publish the SBOM via GitHub Actions with artifact attestations enabled."
             ),
             status="fail",

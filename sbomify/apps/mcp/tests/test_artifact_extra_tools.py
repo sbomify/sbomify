@@ -353,6 +353,41 @@ async def test_search_and_validate_licenses(make_token):
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
+async def test_an_exact_license_identifier_comes_first(make_token):
+    """Searching "mit" lists MIT first, then identifiers that start with it, then the rest that only contain it."""
+    token = await sync_to_async(make_token)(SCOPE_PRESETS["read_only"])
+
+    async with mcp_http() as client:
+        found = await call_tool(client, token, "search_licenses", {"search": "mit", "page_size": 100})
+
+    keys = [entry["key"] for entry in structured(found)["items"]]
+    assert keys[0] == "MIT"
+    starts = [i for i, key in enumerate(keys) if key.casefold().startswith("mit")]
+    contains = [i for i, key in enumerate(keys) if not key.casefold().startswith("mit")]
+    assert contains and max(starts) < min(contains)
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_tool_refuses_an_argument_it_does_not_take(make_token):
+    """search_licenses takes `search`. Called with `query`, it used to drop the argument and
+    return the unfiltered list; now it names the argument instead."""
+    from sbomify.apps.mcp.server import mcp
+
+    token = await sync_to_async(make_token)(SCOPE_PRESETS["read_only"])
+
+    async with mcp_http() as client:
+        response = await call_tool(client, token, "search_licenses", {"query": "MIT"})
+
+    payload = parse(response)
+    assert payload["result"].get("isError") is True, payload
+    assert "query" in json.dumps(payload)
+    schema = next(tool for tool in await mcp.list_tools() if tool.name == "search_licenses").inputSchema
+    assert schema.get("additionalProperties") is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
 async def test_a_guest_is_refused_the_license_tools(mcp_owner, make_token):
     """The license list is reference data, but a guest is refused every tool, these included."""
     from sbomify.apps.teams.models import Member
