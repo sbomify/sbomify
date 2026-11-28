@@ -88,6 +88,9 @@ COPY sbomify/apps/compliance/templates/ ./sbomify/apps/compliance/templates/
 COPY sbomify/apps/controls/templates/ ./sbomify/apps/controls/templates/
 COPY sbomify/apps/oidc/templates/ ./sbomify/apps/oidc/templates/
 COPY sbomify/apps/ops/templates/ ./sbomify/apps/ops/templates/
+COPY sbomify/apps/access_tokens/templates/ ./sbomify/apps/access_tokens/templates/
+COPY sbomify/apps/audit/templates/ ./sbomify/apps/audit/templates/
+COPY sbomify/apps/integrations/templates/ ./sbomify/apps/integrations/templates/
 COPY sbomify/templates/ ./sbomify/templates/
 
 # Copy existing static files
