@@ -118,7 +118,9 @@ def routes_panel(integration: Integration) -> dict[str, Any]:
         result = list_channels(integration)
         if result.ok and result.value is not None:
             channels = result.value
-        else:
+        elif integration.status == Integration.Status.CONNECTED:
+            # A refused token has just marked the connection revoked, and the
+            # reconnect warning already carries Slack's reason.
             channels_error = result.error or "Could not list your channels."
 
     channel_options = [

@@ -272,6 +272,20 @@ class TestTheSettingsTab:
         assert "Frameworks on your Trust Center" not in content
         assert "xoxb-live" not in content
 
+    def test_a_token_refused_while_listing_channels_asks_for_a_reconnect_at_once(
+        self, admin_client_for_team, connected_slack, fake_slack
+    ) -> None:
+        fake_slack.fail_with = ProviderAuthError("Slack refused the stored credential.", service="slack")
+
+        first = self._panel(admin_client_for_team, connected_slack.team).content.decode()
+        second = self._panel(admin_client_for_team, connected_slack.team).content.decode()
+
+        for content in (first, second):
+            assert "Needs reconnecting" in content
+            assert "Reconnect Slack" in content
+            assert "Could not list your channels" not in content
+            assert content.count("Slack refused the stored credential.") == 1
+
     def test_choosing_a_channel_saves_it(self, admin_client_for_team, connected_slack, fake_slack) -> None:
         response = admin_client_for_team.post(
             reverse("integrations:panel", kwargs={"workspace_key": connected_slack.team.key}),
