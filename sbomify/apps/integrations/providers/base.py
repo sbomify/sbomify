@@ -96,6 +96,10 @@ class ProviderSpec:
     # admin can tell which of their accounts is connected. Empty when the token
     # response does not say.
     account_path: str = ""
+    # Dotted path to ``revoke(access_token: str) -> None``, called once a
+    # disconnect has deleted our copy of the credential. Empty for a provider
+    # whose credential runs out on its own.
+    revoke_path: str = ""
 
     def _setting(self, name: str) -> str:
         return str(getattr(settings, name, "") or "")

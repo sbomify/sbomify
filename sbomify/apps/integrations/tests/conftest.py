@@ -125,6 +125,30 @@ class FakeSlack:
 
 
 @pytest.fixture
+def slack_api(monkeypatch) -> tuple[list[dict], dict]:
+    """Answers every Slack Web API call with ``answer`` and records each call.
+
+    Set ``answer["status"]`` and ``answer["body"]`` to play a refusal, or
+    ``answer["raise"]`` to play a Slack that cannot be reached.
+    """
+    from types import SimpleNamespace
+
+    from sbomify.apps.integrations.providers import slack
+
+    calls: list[dict] = []
+    answer: dict = {"status": 200, "body": {"ok": True, "revoked": True}}
+
+    def fake_request(method, url, **kwargs):
+        calls.append({"method": method, "url": url, **kwargs})
+        if "raise" in answer:
+            raise answer["raise"]
+        return SimpleNamespace(status_code=answer["status"], json=lambda: answer["body"])
+
+    monkeypatch.setattr(slack, "request_with_retry", fake_request)
+    return calls, answer
+
+
+@pytest.fixture
 def fake_slack(monkeypatch) -> FakeSlack:
     from django.core.cache import cache
 

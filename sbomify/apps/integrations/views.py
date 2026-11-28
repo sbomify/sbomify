@@ -91,7 +91,12 @@ class IntegrationsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMi
         if not result.ok:
             return htmx_error_response(result.error or "Could not disconnect")
 
-        if provider.kind == "notifications":
+        if result.value:
+            message = (
+                f"Disconnected {provider.name}, but {provider.name} did not confirm sbomify lost access. "
+                f"Remove the sbomify app in {provider.name} to be sure."
+            )
+        elif provider.kind == "notifications":
             message = f"Disconnected {provider.name}. sbomify no longer posts to it."
         else:
             message = f"Disconnected {provider.name}. Its frameworks are no longer on your Trust Center."
