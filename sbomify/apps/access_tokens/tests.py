@@ -1426,3 +1426,121 @@ class TestThrottleRefusesCleanlyWhenRedisIsDown:
                 assert AccessTokenRateThrottle().allow_request(request) is False
 
         assert mock_logger.exception.call_count == 1
+
+
+@pytest.mark.django_db
+def test_a_malformed_token_is_one_warning(mocker):
+    """A bad token was three log lines: the decode failure and a restatement of
+    it, both WARNING, then the audit event. A CI job with a broken secret
+    retries on every run, so each rejection is now the audit WARNING alone,
+    with the decode cause at INFO beside it."""
+    from sbomify.apps.access_tokens import utils
+
+    log = mocker.patch.object(utils, "log")
+    audit_log = mocker.patch.object(utils, "audit_log")
+
+    assert get_user_and_token_record("not-a-jwt") == (None, None)
+
+    log.warning.assert_not_called()
+    assert "Not enough segments" in str(log.info.call_args)
+    audit_log.warning.assert_called_once()
+    assert '"reason": "decode"' in audit_log.warning.call_args.args[1]
+
+
+@pytest.fixture
+def token_log(caplog):
+    """Records from the token helpers and the audit trail, neither of which
+    propagates to caplog's root handler."""
+    loggers = [logging.getLogger("sbomify"), logging.getLogger("sbomify.audit")]
+    for logger in loggers:
+        logger.addHandler(caplog.handler)
+    caplog.set_level(logging.DEBUG, logger="sbomify.apps.access_tokens.utils")
+    try:
+        yield lambda: [
+            (r.name, r.levelno, r.getMessage())
+            for r in caplog.records
+            if r.name in ("sbomify.apps.access_tokens.utils", "sbomify.audit.token_auth")
+        ]
+    finally:
+        for logger in loggers:
+            logger.removeHandler(caplog.handler)
+
+
+def _wrong_key_token(user) -> str:
+    return jwt.encode({"sub": str(user.pk), "token_type": "pat"}, "not-the-secret-key-" * 3, algorithm="HS256")
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("bad_token", ["not-a-jwt", "wrong-key"])
+def test_each_rejected_token_is_one_audit_warning(sample_user, token_log, caplog, bad_token):  # noqa: F811
+    token = _wrong_key_token(sample_user) if bad_token == "wrong-key" else bad_token
+
+    for attempt in ("first", "repeat"):
+        caplog.clear()
+        assert get_user_and_token_record(token) == (None, None)
+        records = token_log()
+
+        warnings = [(name, message) for name, level, message in records if level >= logging.WARNING]
+        assert len(warnings) == 1, attempt
+        assert warnings[0][0] == "sbomify.audit.token_auth"
+        assert '"reason": "decode"' in warnings[0][1]
+        causes = [m for name, level, m in records if name.endswith(".utils") and level == logging.INFO]
+        assert [m for m in causes if m.startswith("Token validation failed: ")], attempt
+
+
+@pytest.mark.django_db
+def test_an_expired_oidc_token_stays_at_info(sample_user, token_log):  # noqa: F811
+    from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC
+
+    expired = create_personal_access_token(sample_user, expires_at=time() - 100, token_type=TOKEN_TYPE_OIDC)
+
+    assert get_user_and_token_record(expired) == (None, None)
+
+    records = token_log()
+    assert [level for _, level, _ in records] == [logging.INFO, logging.INFO]
+    assert '"reason": "expired"' in records[-1][2]
+
+
+def test_the_gzip_probe_records_a_bad_token_as_one_audit_warning(token_log):
+    """The middleware refuses the request before the view's auth runs, so the
+    probe is the only place this rejection can be recorded."""
+    from sbomify.apps.core.middleware import _carries_signed_token
+
+    request = RequestFactory().post("/api/v1/sboms/upload", HTTP_AUTHORIZATION="Bearer not-a-jwt")
+
+    assert _carries_signed_token(request) is False
+
+    records = token_log()
+    assert [(name, level) for name, level, _ in records] == [
+        ("sbomify.apps.access_tokens.utils", logging.INFO),
+        ("sbomify.audit.token_auth", logging.WARNING),
+    ]
+    assert '"reason": "decode"' in records[-1][2]
+    assert '"attempted_action": "POST /api/v1/sboms/upload"' in records[-1][2]
+
+
+@pytest.mark.django_db
+def test_the_gzip_probe_records_an_expired_token_at_info(sample_user, token_log):  # noqa: F811
+    from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC
+    from sbomify.apps.core.middleware import _carries_signed_token
+
+    expired = create_personal_access_token(sample_user, expires_at=time() - 100, token_type=TOKEN_TYPE_OIDC)
+    request = RequestFactory().post("/api/v1/sboms/upload", HTTP_AUTHORIZATION=f"Bearer {expired}")
+
+    assert _carries_signed_token(request) is False
+
+    records = token_log()
+    assert [level for _, level, _ in records] == [logging.INFO, logging.INFO]
+    assert '"reason": "expired"' in records[-1][2]
+
+
+@pytest.mark.django_db
+def test_the_gzip_probe_records_nothing_for_a_good_token(sample_user, token_log):  # noqa: F811
+    """A token that passes is left for the view's auth to record, once."""
+    from sbomify.apps.core.middleware import _carries_signed_token
+
+    token = create_personal_access_token(sample_user)
+    request = RequestFactory().post("/api/v1/sboms/upload", HTTP_AUTHORIZATION=f"Bearer {token}")
+
+    assert _carries_signed_token(request) is True
+    assert token_log() == []

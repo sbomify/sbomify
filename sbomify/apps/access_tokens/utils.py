@@ -245,7 +245,10 @@ def decode_personal_access_token(token: str) -> dict[str, Any]:
         log.info("Token expired: %s", e)
         raise DecodeError("Token expired") from e
     except InvalidTokenError as e:
-        log.warning("Token validation failed: %s", e)
+        # INFO, not WARNING: callers decide whether a bad token is a rejection
+        # worth flagging. get_user_and_token_record records it as the audit
+        # WARNING, and the gzip middleware only probes with it.
+        log.info("Token validation failed: %s", e)
         raise DecodeError("Invalid token format") from e
 
 
@@ -254,8 +257,7 @@ def get_user_from_personal_access_token(token: str) -> AbstractBaseUser | None:
 
     try:
         payload = decode_personal_access_token(token)
-    except DecodeError as e:
-        log.warning(f"Failed to decode token: {str(e)}")
+    except DecodeError:
         return None
 
     # Convert sub to string if needed
@@ -326,7 +328,8 @@ def get_user_and_token_record(
             # record the audit event (also INFO) without duplicating that line.
             emit("failure", reason="expired")
             return None, None
-        log.warning(f"Failed to decode token: {str(e)}")
+        # The audit event is the one WARNING for this; the cause was logged by
+        # decode_personal_access_token.
         emit("failure", reason="decode")
         return None, None
 
