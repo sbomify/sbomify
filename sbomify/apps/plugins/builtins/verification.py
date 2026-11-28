@@ -52,6 +52,7 @@ import requests
 from django.conf import settings
 
 from sbomify.apps.plugins.builtins._spdx3_helpers import is_spdx3
+from sbomify.apps.plugins.builtins._spdx_shared import spdx2_root_spdxid
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, RetryLaterError, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory, ScanMode
 from sbomify.apps.plugins.sdk.results import (
@@ -1014,14 +1015,23 @@ class SBOMVerificationPlugin(AssessmentPlugin):
         return None
 
     def _extract_vcs_info_spdx(self, sbom_data: dict[str, Any]) -> dict[str, str] | None:
-        # packages[0] is the document's subject by convention rather than by
-        # guarantee, so every return below is tagged package-derived for the
-        # same reason as the CycloneDX component fallback above.
         packages = sbom_data.get("packages", [])
         if not packages:
             return None
 
-        main_pkg = packages[0]
+        # The subject is the package the document DESCRIBES. syft lists it last,
+        # after every dependency, so packages[0] is only a fallback for a
+        # document that names no subject, and its answer is tagged
+        # package-derived like the CycloneDX component one. A named subject
+        # with no GitHub reference names no repository: packages[0] would be a
+        # dependency, whose repository never attests this SBOM.
+        if (root := spdx2_root_spdxid(sbom_data)) is not None:
+            subject = next((pkg for pkg in packages if isinstance(pkg, dict) and pkg.get("SPDXID") == root), None)
+            parsed = self._vcs_info_of_spdx_package(subject) if subject is not None else None
+            return {**parsed, "source": "document"} if parsed else None
+        return self._vcs_info_of_spdx_package(packages[0])
+
+    def _vcs_info_of_spdx_package(self, main_pkg: dict[str, Any]) -> dict[str, str] | None:
         download_location = main_pkg.get("downloadLocation", "")
         if download_location and download_location not in ("NOASSERTION", "NONE"):
             vcs_url = self._parse_spdx_download_location(download_location)
